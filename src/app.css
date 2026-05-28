@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-neo-white text-neo-black;
+  }
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    border: 3px solid #0a0a0a;
+    -webkit-text-fill-color: #0a0a0a;
+    -webkit-box-shadow: 0 0 0px 1000px #fff inset;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+}
+
+@layer components {
+  .brut-card {
+    @apply bg-neo-white border-brut-thick border-neo-black shadow-brut p-6;
+  }
+
+  .brut-input {
+    @apply w-full px-4 py-3 bg-neo-white border-brut border-neo-black text-neo-black
+           font-brut text-brut-base placeholder:text-neo-darkgray
+           focus:outline-none focus:shadow-brut-sm focus:-translate-y-0.5
+           transition-all duration-150;
+  }
+
+  .brut-input-error {
+    @apply border-neo-red shadow-brut-sm;
+  }
+
+  .brut-label {
+    @apply block font-brut text-brut-sm uppercase tracking-wider mb-2 text-neo-black;
+  }
+
+  .brut-btn {
+    @apply inline-flex items-center justify-center font-brut text-brut-base
+           px-6 py-3 border-brut border-neo-black bg-neo-white text-neo-black
+           shadow-brut-sm uppercase tracking-wider cursor-pointer
+           transition-all duration-150
+           hover:-translate-y-0.5 hover:shadow-brut
+           active:translate-y-0 active:shadow-brut-sm;
+  }
+
+  .brut-btn-primary {
+    @apply brut-btn bg-neo-yellow text-neo-black shadow-brut-colored
+           hover:shadow-brut;
+  }
+
+  .brut-btn-ghost {
+    @apply brut-btn bg-transparent border-none shadow-none
+           hover:bg-neo-gray/30 hover:shadow-none;
+  }
+
+  .brut-btn-danger {
+    @apply brut-btn bg-neo-red text-neo-white shadow-brut-pink;
+  }
+
+  .brut-btn-google {
+    @apply brut-btn bg-neo-black text-neo-white shadow-brut;
+  }
+
+  .brut-link {
+    @apply font-brut text-brut-sm text-neo-black underline decoration-2
+           underline-offset-2 decoration-neo-yellow
+           hover:decoration-neo-black transition-colors;
+  }
+
+  .brut-divider {
+    @apply flex items-center gap-4 my-6;
+  }
+
+  .brut-divider::before,
+  .brut-divider::after {
+    @apply flex-1 h-0.5 bg-neo-black;
+    content: '';
+  }
+
+  .brut-alert {
+    @apply border-brut border-neo-black p-4 font-brut text-brut-sm;
+  }
+
+  .brut-alert-error {
+    @apply brut-alert bg-neo-red/10 border-neo-red text-neo-red;
+  }
+
+  .brut-alert-success {
+    @apply brut-alert bg-neo-lime/10 border-neo-lime text-neo-lime;
+  }
+
+  .brut-heading {
+    @apply font-brut text-brut-3xl uppercase tracking-tight;
+  }
+
+  .brut-subheading {
+    @apply font-brut text-brut-lg uppercase tracking-wider;
+  }
+
+  .brut-nav-link {
+    @apply font-brut text-brut-sm uppercase tracking-wider px-4 py-2
+           border-brut border-transparent hover:border-neo-black
+           transition-all duration-150;
+  }
+
+  .brut-nav-link-active {
+    @apply brut-nav-link border-neo-black bg-neo-yellow;
+  }
+
+  .brut-spinner {
+    @apply w-6 h-6 border-brut border-neo-black border-t-transparent
+           rounded-full animate-spin;
+  }
+
+  .brut-avatar {
+    @apply w-10 h-10 border-brut border-neo-black bg-neo-yellow
+           flex items-center justify-center font-brut text-brut-lg;
+  }
+}
+
+@layer utilities {
+  .brut-stack > * + * {
+    margin-top: 1rem;
+  }
+}
