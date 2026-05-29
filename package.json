@@ -8,7 +8,12 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"prepack": "svelte-kit sync && svelte-package && publint",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json --watch"
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json --watch",
+		"db:generate": "prisma generate",
+		"db:push": "prisma db push",
+		"db:studio": "prisma studio",
+		"db:migrate": "prisma migrate dev",
+		"postinstall": "prisma generate"
 	},
 	"files": [
 		"dist",
@@ -36,9 +41,13 @@
 		"@sveltejs/package": "^2.5.7",
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@types/node": "^25.9.1",
+		"autoprefixer": "^10.5.0",
+		"postcss": "^8.5.15",
+		"prisma": "^6.19.3",
 		"publint": "^0.3.18",
 		"svelte": "^5.55.2",
 		"svelte-check": "^4.4.6",
+		"tailwindcss": "^3.4.19",
 		"typescript": "^6.0.2",
 		"vite": "^8.0.7"
 	},
@@ -46,8 +55,12 @@
 		"svelte"
 	],
 	"dependencies": {
+		"@prisma/client": "^7.8.0",
+		"@supabase/ssr": "^0.10.3",
+		"@supabase/supabase-js": "^2.106.2",
 		"@tensorflow-models/coco-ssd": "^2.2.3",
 		"@tensorflow/tfjs": "^4.22.0",
-		"@tensorflow/tfjs-backend-webgl": "^4.22.0"
+		"@tensorflow/tfjs-backend-webgl": "^4.22.0",
+		"tesseract.js": "^6.0.1"
 	}
 }
