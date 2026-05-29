@@ -38,12 +38,7 @@
   }
 
   async function handleGoogleLogin() {
-    const supabase = getSupabaseBrowserClient();
-    const { error: err } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${location.origin}/auth/callback` }
-    });
-    if (err) error = err.message;
+    window.location.href = '/auth/oauth/google';
   }
 
   async function handleMagicLink() {
@@ -58,7 +53,7 @@
     const supabase = getSupabaseBrowserClient();
     const { error: err } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${location.origin}/auth/callback` }
+      options: { emailRedirectTo: `${location.origin}/auth/confirm` }
     });
 
     if (err) {

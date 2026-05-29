@@ -17,7 +17,7 @@
 
     const supabase = getSupabaseBrowserClient();
     const { error: err } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${location.origin}/auth/reset-password`
+      redirectTo: `${location.origin}/auth/confirm?next=/auth/reset-password`
     });
 
     if (err) {

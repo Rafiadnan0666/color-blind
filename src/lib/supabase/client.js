@@ -3,7 +3,11 @@ import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_PUBLISHABLE_KEY } from '$env/stati
 
 /** @returns {ReturnType<typeof createBrowserClient>} */
 export function createSupabaseBrowserClient() {
-  return createBrowserClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+  return createBrowserClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_PUBLISHABLE_KEY, {
+    global: {
+      fetch,
+    },
+  });
 }
 
 /** @type {ReturnType<typeof createBrowserClient> | null} */

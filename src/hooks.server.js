@@ -1,19 +1,32 @@
 import { createSupabaseServerClient } from '$lib/supabase/server';
 
 export const handle = async ({ event, resolve }) => {
-  event.locals.supabase = createSupabaseServerClient(event.cookies);
+  event.locals.supabase = createSupabaseServerClient(event.cookies, event.setHeaders);
 
-  event.locals.getSession = async () => {
-    const { data: { session } } = await event.locals.supabase.auth.getSession();
-    return session;
-  };
+  /** @type {{ session: import('@supabase/supabase-js').Session | null; user: import('@supabase/supabase-js').User | null } | null} */
+  let sessionCache = null;
 
   event.locals.safeGetSession = async () => {
+    if (sessionCache) return sessionCache;
+
     const { data: { session } } = await event.locals.supabase.auth.getSession();
-    if (!session) return { session: null, user: null };
-    const { data: { user }, error } = await event.locals.supabase.auth.getUser();
-    if (error) return { session: null, user: null };
-    return { session, user };
+    if (!session) {
+      sessionCache = { session: null, user: null };
+      return sessionCache;
+    }
+
+    const {
+      data: { user },
+      error
+    } = await event.locals.supabase.auth.getUser();
+
+    if (error) {
+      sessionCache = { session: null, user: null };
+      return sessionCache;
+    }
+
+    sessionCache = { session, user };
+    return sessionCache;
   };
 
   return resolve(event, {

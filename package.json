@@ -60,6 +60,7 @@
 		"@supabase/supabase-js": "^2.106.2",
 		"@tensorflow-models/coco-ssd": "^2.2.3",
 		"@tensorflow/tfjs": "^4.22.0",
-		"@tensorflow/tfjs-backend-webgl": "^4.22.0"
+		"@tensorflow/tfjs-backend-webgl": "^4.22.0",
+		"tesseract.js": "^6.0.1"
 	}
 }

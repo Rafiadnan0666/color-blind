@@ -8,7 +8,7 @@ datasource db {
 }
 
 model UserProfile {
-  id        String   @id @default(uuid())
+  id        String   @id
   email     String   @unique
   name      String?
   avatarUrl String?

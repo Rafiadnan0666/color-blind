@@ -1,5 +1,6 @@
 <script>
   import { goto } from '$app/navigation';
+  import { onMount } from 'svelte';
   import { getSupabaseBrowserClient } from '$lib/supabase/client';
 
   let password = $state('');
@@ -8,29 +9,39 @@
   let success = $state('');
   let loading = $state(false);
   let isRecoverySession = $state(false);
+  let checking = $state(true);
 
   const supabase = getSupabaseBrowserClient();
 
+  onMount(() => {
+    checkRecovery();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((/** @type {string} */ event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        isRecoverySession = true;
+        checking = false;
+        error = '';
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  });
+
   async function checkRecovery() {
     const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user?.aud === 'authenticated') {
+    if (session) {
       isRecoverySession = true;
+      checking = false;
       return;
     }
-    const { data } = await supabase.auth.getUser();
-    if (data?.user) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
       isRecoverySession = true;
+      checking = false;
+      return;
     }
+    checking = false;
   }
-
-  checkRecovery();
-
-  supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'PASSWORD_RECOVERY') {
-      isRecoverySession = true;
-      error = '';
-    }
-  });
 
   /**
    * @param {Event} e
@@ -63,7 +74,7 @@
     success = 'Password updated successfully!';
     loading = false;
 
-    setTimeout(() => goto('/auth/login'), 2000);
+    setTimeout(() => goto('/auth/login', { replaceState: true }), 2000);
   }
 </script>
 
@@ -82,9 +93,16 @@
         <div class="brut-alert-success mb-6">{success}</div>
       {/if}
 
-      {#if !isRecoverySession}
+      {#if checking}
         <p class="font-brut text-brut-sm text-neo-darkgray mb-6">
           Checking recovery session...
+        </p>
+      {:else if !isRecoverySession}
+        <p class="font-brut text-brut-sm text-neo-darkgray mb-6">
+          No recovery session found. Please request a new password reset.
+        </p>
+        <p class="text-center">
+          <a href="/auth/forgot-password" class="brut-link">Request reset link</a>
         </p>
       {:else}
       <form onsubmit={handleUpdatePassword} class="brut-stack">

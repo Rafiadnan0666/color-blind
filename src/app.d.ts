@@ -9,7 +9,9 @@ declare global {
     }
     interface PageData {
       session: Session | null;
-      user: User | null;
+      user?: User | null;
+      supabase?: SupabaseClient;
+      cookies?: Array<{ name: string; value: string }>;
     }
     // interface Error {}
     // interface PageState {}

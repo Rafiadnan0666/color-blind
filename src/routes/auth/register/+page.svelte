@@ -9,6 +9,7 @@
   let error = $state('');
   let success = $state('');
   let loading = $state(false);
+  
 
   $effect(() => {
     const e = $page.url.searchParams.get('error');
@@ -30,7 +31,7 @@
       password,
       options: {
         data: { name },
-        emailRedirectTo: `${location.origin}/auth/callback`
+        emailRedirectTo: `${location.origin}/auth/confirm`
       }
     });
 
@@ -46,17 +47,17 @@
       return;
     }
 
+    if (data?.session) {
+      goto('/', { replaceState: true });
+      return;
+    }
+
     success = 'Check your email for a confirmation link!';
     loading = false;
   }
 
   async function handleGoogleLogin() {
-    const supabase = getSupabaseBrowserClient();
-    const { error: err } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: `${location.origin}/auth/callback` }
-    });
-    if (err) error = err.message;
+    window.location.href = '/auth/oauth/google';
   }
 </script>
 

@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase/server.js';
 
-export const GET = async ({ url, cookies }) => {
+export const GET = async ({ url, cookies, setHeaders }) => {
   const code = url.searchParams.get('code');
   const next = url.searchParams.get('next') || '/';
 
@@ -9,7 +9,7 @@ export const GET = async ({ url, cookies }) => {
     throw redirect(303, '/auth/login?error=No auth code provided');
   }
 
-  const supabase = createSupabaseServerClient(cookies);
+  const supabase = createSupabaseServerClient(cookies, setHeaders);
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {

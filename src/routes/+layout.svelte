@@ -2,23 +2,16 @@
   import '../app.css';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import { session, user, isAuthLoading } from '$lib/stores/auth';
-  import { getSupabaseBrowserClient } from '$lib/supabase/client';
-  import { onMount } from 'svelte';
+  import { session, user, isAuthLoading, initializeAuthStores } from '$lib/stores/auth';
 
   let { children, data } = $props();
 
   let navOpen = $state(false);
 
-  /** @type {(() => void) | undefined} */
-  let unsub;
-  onMount(() => {
-    if ($page.url.pathname.startsWith('/auth') && $page.url.pathname !== '/auth/callback' && $page.url.pathname !== '/auth/confirm') {
-      unsub = session.subscribe(s => {
-        if (s) goto('/', { replaceState: true });
-      });
+  $effect(() => {
+    if (data) {
+      initializeAuthStores(data);
     }
-    return () => { if (unsub) unsub(); };
   });
 
   async function handleSignOut() {
