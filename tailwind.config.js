@@ -46,6 +46,9 @@ export default {
       animation: {
         'brut-bounce': 'brutBounce 0.3s ease',
         'brut-shake': 'brutShake 0.4s ease',
+        'pulse-glow': 'pulseGlow 1.5s ease-in-out infinite',
+        'slide-up': 'slideUp 0.25s ease-out',
+        'scale-in': 'scaleIn 0.2s ease-out',
       },
       keyframes: {
         brutBounce: {
@@ -57,6 +60,18 @@ export default {
           '0%, 100%': { transform: 'translateX(0)' },
           '25%': { transform: 'translateX(-4px)' },
           '75%': { transform: 'translateX(4px)' },
+        },
+        pulseGlow: {
+          '0%, 100%': { opacity: '0.6' },
+          '50%': { opacity: '1' },
+        },
+        slideUp: {
+          'from': { opacity: '0', transform: 'translateY(12px)' },
+          'to': { opacity: '1', transform: 'translateY(0)' },
+        },
+        scaleIn: {
+          'from': { opacity: '0', transform: 'scale(0.9)' },
+          'to': { opacity: '1', transform: 'scale(1)' },
         },
       }
     }

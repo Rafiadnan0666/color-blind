@@ -3,24 +3,41 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { session, user, isAuthLoading, initializeAuthStores } from '$lib/stores/auth';
+  import BottomNav from '$lib/components/BottomNav.svelte';
+  import { notifications, setUserId } from '$lib/supabase/db';
+  import { onMount } from 'svelte';
 
   let { children, data } = $props();
 
   let navOpen = $state(false);
+  let unreadCount = $state(0);
 
   $effect(() => {
     if (data) {
       initializeAuthStores(data);
+      if (data.user?.id) {
+        setUserId(data.user.id);
+      }
     }
   });
+
+  $effect(() => {
+    if ($user?.id) {
+      setUserId($user.id);
+      loadUnreadCount();
+    }
+  });
+
+  async function loadUnreadCount() {
+    try {
+      unreadCount = await notifications.getUnreadCount();
+    } catch (_) {}
+  }
 
   async function handleSignOut() {
     goto('/auth/logout');
   }
 
-  /**
-   * @param {string} path
-   */
   function isActive(path) {
     return $page.url.pathname === path;
   }
@@ -44,8 +61,11 @@
         {#if $isAuthLoading}
           <div class="brut-spinner"></div>
         {:else if $session}
-          <a href="/" class="brut-nav-link" class:brut-nav-link-active={isActive('/')}>
-            Detect
+          <a href="/detects" class="brut-nav-link" class:brut-nav-link-active={isActive('/detects')}>
+            Scan
+          </a>
+          <a href="/dashboard" class="brut-nav-link" class:brut-nav-link-active={isActive('/dashboard')}>
+            Dashboard
           </a>
           <span class="w-px h-6 bg-neo-black"></span>
           <div class="flex items-center gap-2 ml-2">
@@ -81,8 +101,17 @@
                 {$user?.email ?? ''}
               </div>
             </div>
-            <a href="/" class="brut-nav-link" class:brut-nav-link-active={isActive('/')}>
-              Detect
+            <a href="/detects" class="brut-nav-link" class:brut-nav-link-active={isActive('/detects')}>
+              Scan
+            </a>
+            <a href="/dashboard" class="brut-nav-link" class:brut-nav-link-active={isActive('/dashboard')}>
+              Dashboard
+            </a>
+            <a href="/history" class="brut-nav-link" class:brut-nav-link-active={isActive('/history')}>
+              History
+            </a>
+            <a href="/favorites" class="brut-nav-link" class:brut-nav-link-active={isActive('/favorites')}>
+              Favorites
             </a>
             <button onclick={handleSignOut} class="brut-btn-danger text-sm">
               Logout
@@ -101,9 +130,17 @@
     {@render children()}
   </main>
 
-  <footer class="border-t-brut border-neo-black bg-neo-black text-neo-white py-4">
-    <div class="max-w-7xl mx-auto px-4 text-center font-brut text-brut-xs uppercase tracking-wider">
-      ClrBlind &copy; {new Date().getFullYear()}
-    </div>
-  </footer>
+  {#if $page.url.pathname.startsWith('/auth') || $page.url.pathname === '/'}
+    <footer class="border-t-brut border-neo-black bg-neo-black text-neo-white py-4">
+      <div class="max-w-7xl mx-auto px-4 text-center font-brut text-brut-xs uppercase tracking-wider">
+        ClrBlind &copy; {new Date().getFullYear()}
+      </div>
+    </footer>
+  {/if}
 </div>
+
+{#if !$page.url.pathname.startsWith('/auth') && $page.url.pathname !== '/'}
+  <div class="lg:hidden">
+    <BottomNav unreadCount={unreadCount} />
+  </div>
+{/if}

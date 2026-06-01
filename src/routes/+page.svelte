@@ -1,160 +1,176 @@
 <script>
-	import { onMount } from 'svelte';
-	import { loadModel, detectObjects } from '$lib/detection/objectDetection';
-	import { sampleColor } from '$lib/detection/colorDetection';
-
-	let /** @type {HTMLVideoElement | null} */ video = $state(null);
-	let /** @type {HTMLCanvasElement | null} */ canvas = $state(null);
-	let status = $state('');
-
-	onMount(() => {
-		init();
-	});
-
-	async function init() {
-		try {
-			status = 'Starting camera...';
-			await startCamera();
-			status = 'Loading model...';
-			await loadModel();
-			status = '';
-			detectFrame();
-		} catch (error) {
-			status = `Error: ${error instanceof Error ? error.message : String(error)}`;
-			console.error(error);
-		}
-	}
-
-	async function startCamera() {
-		const stream = await navigator.mediaDevices.getUserMedia({
-			video: { facingMode: 'environment' },
-			audio: false
-		});
-
-		if (!video) return;
-		video.srcObject = stream;
-		await video.play();
-
-		const vid = video;
-		await new Promise((resolve) => {
-			if (vid.videoWidth > 0) {
-				resolve(undefined);
-				return;
-			}
-			vid.addEventListener('loadeddata', () => resolve(undefined), { once: true });
-		});
-
-		if (canvas && video) {
-			canvas.width = video.videoWidth;
-			canvas.height = video.videoHeight;
-		}
-	}
-
-	async function detectFrame() {
-		if (!video) {
-			requestAnimationFrame(detectFrame);
-			return;
-		}
-
-		try {
-			const predictions = await detectObjects(video);
-			drawBoxes(predictions, video);
-		} catch (error) {
-			console.error(error);
-		}
-
-		requestAnimationFrame(detectFrame);
-	}
-
-	/**
-	 * @param {Array<{bbox: number[], class: string, score: number}>} predictions
-	 * @param {HTMLVideoElement} vid
-	 */
-	function drawBoxes(predictions, vid) {
-		if (!canvas) return;
-
-		const ctx = canvas.getContext('2d');
-		if (!ctx) return;
-
-		ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-		for (const prediction of predictions) {
-			const [x, y, width, height] = prediction.bbox;
-
-			const color = sampleColor(vid, x, y, width, height);
-
-			ctx.strokeStyle = color.hex;
-			ctx.lineWidth = 3;
-			ctx.strokeRect(x, y, width, height);
-
-			const label = `${prediction.class} ${Math.round(prediction.score * 100)}%`;
-
-			ctx.font = 'bold 18px sans-serif';
-			const textWidth = ctx.measureText(label).width;
-			const colorChipSize = 16;
-			const colorChipGap = 4;
-			const nameWidth = ctx.measureText(color.name).width;
-			const bgWidth = textWidth + colorChipSize + colorChipGap + nameWidth + 20;
-
-			ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-			ctx.fillRect(x, y - 26, bgWidth, 26);
-
-			ctx.fillStyle = color.hex;
-			ctx.fillRect(x + 4, y - 22, colorChipSize, colorChipSize);
-
-			ctx.fillStyle = '#ffffff';
-			ctx.fillText(label, x + 4 + colorChipSize + colorChipGap, y - 6);
-			ctx.fillStyle = color.hex;
-			ctx.fillText(color.name, x + 4 + colorChipSize + colorChipGap + textWidth + 4, y - 6);
-		}
-	}
+  import { session } from '$lib/stores/auth';
+  import { goto } from '$app/navigation';
 </script>
 
-{#if status}
-	<div class="status">{status}</div>
-{/if}
+<!-- Hero Section -->
+<div class="min-h-screen bg-gradient-to-br from-neo-white via-blue-50 to-purple-50 flex items-center justify-center px-4">
+  <div class="max-w-4xl mx-auto text-center">
+    <!-- Main Heading -->
+    <div class="brut-card border-4 border-neo-black bg-yellow-100 mb-8 inline-block">
+      <h1 class="brut-heading text-brut-5xl uppercase tracking-tighter">
+        <i class="fas fa-eye text-blue-600 mr-3"></i>Color Blind<i class="fas fa-lightbulb text-yellow-500 ml-3"></i>
+      </h1>
+    </div>
 
-<div class="camera-container" class:active={!status}>
-	<video bind:this={video} autoplay playsinline muted></video>
-	<canvas bind:this={canvas}></canvas>
+    <p class="font-brut text-brut-lg uppercase tracking-wide text-neo-darkgray mb-8 max-w-2xl mx-auto">
+      Advanced AI-powered color blindness detection to build truly accessible designs
+    </p>
+
+    <!-- CTA Button -->
+    {#if $session}
+      <a href="/dashboard" class="brut-btn-primary text-brut-lg px-8 py-4 inline-block">
+        Go to Dashboard
+      </a>
+    {:else}
+      <div class="flex gap-4 justify-center flex-wrap">
+        <a href="/auth/login" class="brut-btn-primary text-brut-lg px-8 py-4">
+          Sign In
+        </a>
+        <a href="/auth/register" class="brut-btn text-brut-lg px-8 py-4">
+          Sign Up
+        </a>
+      </div>
+    {/if}
+  </div>
 </div>
 
-<style>
-	.status {
-		position: fixed;
-		inset: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font: 18px sans-serif;
-		color: #555;
-		background: #f5f5f5;
-	}
+<!-- Features Section -->
+<div class="bg-neo-white py-20 px-4">
+  <div class="max-w-6xl mx-auto">
+    <h2 class="brut-heading text-brut-4xl text-center mb-16 uppercase">Why Choose ClrBlind?</h2>
 
-	.camera-container {
-		position: relative;
-		width: 100%;
-		max-width: 800px;
-		margin: 0 auto;
-		opacity: 0;
-		transition: opacity 0.3s;
-	}
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <!-- Feature 1 -->
+      <div class="brut-card border-3 border-neo-black bg-cyan-100 hover:shadow-brut-lg transition-all">
+        <div class="text-brut-4xl mb-4">
+          <i class="fas fa-robot text-cyan-600"></i>
+        </div>
+        <h3 class="brut-heading text-brut-2xl mb-3 uppercase">AI Powered</h3>
+        <p class="font-brut text-brut-sm text-neo-darkgray">
+          Machine learning algorithms trained on thousands of images for accurate detection
+        </p>
+      </div>
 
-	.camera-container.active {
-		opacity: 1;
-	}
+      <!-- Feature 2 -->
+      <div class="brut-card border-3 border-neo-black bg-pink-100 hover:shadow-brut-lg transition-all">
+        <div class="text-brut-4xl mb-4">
+          <i class="fas fa-bolt text-pink-600"></i>
+        </div>
+        <h3 class="brut-heading text-brut-2xl mb-3 uppercase">Lightning Fast</h3>
+        <p class="font-brut text-brut-sm text-neo-darkgray">
+          Browser-based processing means instant results without uploading to servers
+        </p>
+      </div>
 
-	video {
-		width: 100%;
-		display: block;
-	}
+      <!-- Feature 3 -->
+      <div class="brut-card border-3 border-neo-black bg-green-100 hover:shadow-brut-lg transition-all">
+        <div class="text-brut-4xl mb-4">
+          <i class="fas fa-shield-alt text-green-600"></i>
+        </div>
+        <h3 class="brut-heading text-brut-2xl mb-3 uppercase">Privacy First</h3>
+        <p class="font-brut text-brut-sm text-neo-darkgray">
+          Your images never leave your browser. Complete privacy protection
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
 
-	canvas {
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		pointer-events: none;
-	}
-</style>
+<!-- Color Blindness Info Section -->
+<div class="bg-gradient-to-r from-purple-100 to-blue-100 py-20 px-4">
+  <div class="max-w-6xl mx-auto">
+    <h2 class="brut-heading text-brut-4xl text-center mb-16 uppercase">About Color Blindness</h2>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <!-- Info 1 -->
+      <div class="brut-card border-3 border-neo-black bg-yellow-100">
+        <h3 class="brut-heading text-brut-2xl mb-4 uppercase">
+          <i class="fas fa-users text-yellow-600 mr-2"></i>The Numbers
+        </h3>
+        <p class="font-brut text-brut-lg mb-3">
+          <strong>1 in 12 men</strong> and <strong>1 in 200 women</strong> have some form of color blindness
+        </p>
+        <p class="font-brut text-brut-sm text-neo-darkgray">
+          That's over 300 million people worldwide who rely on accessible design
+        </p>
+      </div>
+
+      <!-- Info 2 -->
+      <div class="brut-card border-3 border-neo-black bg-orange-100">
+        <h3 class="brut-heading text-brut-2xl mb-4 uppercase">
+          <i class="fas fa-palette text-orange-600 mr-2"></i>Common Types
+        </h3>
+        <ul class="font-brut text-brut-sm text-neo-darkgray space-y-2">
+          <li><strong>Protanopia:</strong> Red/green color blindness</li>
+          <li><strong>Deuteranopia:</strong> Green/red color blindness</li>
+          <li><strong>Tritanopia:</strong> Blue/yellow color blindness</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- How It Works Section -->
+<div class="bg-neo-white py-20 px-4">
+  <div class="max-w-4xl mx-auto">
+    <h2 class="brut-heading text-brut-4xl text-center mb-16 uppercase">How It Works</h2>
+
+    <div class="space-y-6">
+      <div class="brut-card border-3 border-neo-black bg-blue-100 flex items-start gap-6">
+        <div class="text-brut-4xl shrink-0">
+          <i class="fas fa-upload text-blue-600"></i>
+        </div>
+        <div>
+          <h3 class="brut-heading text-brut-2xl mb-2 uppercase">1. Upload Image Or Scan Surroundings</h3>
+          <p class="font-brut text-brut-sm text-neo-darkgray">
+            Select any image from your device. Supports PNG, JPG, and WebP formats
+          </p>
+        </div>
+      </div>
+
+      <div class="brut-card border-3 border-neo-black bg-green-100 flex items-start gap-6">
+        <div class="text-brut-4xl shrink-0">
+          <i class="fas fa-cogs text-green-600"></i>
+        </div>
+        <div>
+          <h3 class="brut-heading text-brut-2xl mb-2 uppercase">2. Analysis</h3>
+          <p class="font-brut text-brut-sm text-neo-darkgray">
+            Our AI analyzes color contrast, saturation, and patterns in real-time
+          </p>
+        </div>
+      </div>
+
+      <div class="brut-card border-3 border-neo-black bg-pink-100 flex items-start gap-6">
+        <div class="text-brut-4xl shrink-0">
+          <i class="fas fa-chart-bar text-pink-600"></i>
+        </div>
+        <div>
+          <h3 class="brut-heading text-brut-2xl mb-2 uppercase">3. Results</h3>
+          <p class="font-brut text-brut-sm text-neo-darkgray">
+            Get detailed insights and recommendations to improve accessibility
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CTA Footer -->
+<div class="bg-gradient-to-r from-cyan-100 to-blue-100 py-20 px-4 text-center border-t-4 border-neo-black">
+  <div class="max-w-2xl mx-auto">
+    <h2 class="brut-heading text-brut-4xl mb-4 uppercase">Ready to Begin?</h2>
+    <p class="font-brut text-brut-sm text-neo-darkgray uppercase mb-8">
+      Start detecting color blindness patterns and create truly accessible designs
+    </p>
+    {#if $session}
+      <a href="/dashboard" class="brut-btn-primary text-brut-lg px-8 py-4 inline-block">
+        Go to Dashboard
+      </a>
+    {:else}
+      <a href="/auth/register" class="brut-btn-primary text-brut-lg px-8 py-4 inline-block">
+        Get Started Free
+      </a>
+    {/if}
+  </div>
+</div>

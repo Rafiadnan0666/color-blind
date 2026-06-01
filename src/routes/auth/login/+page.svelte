@@ -34,7 +34,7 @@
       return;
     }
 
-    goto('/');
+    goto('/dashboard');
   }
 
   async function handleGoogleLogin() {

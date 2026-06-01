@@ -48,7 +48,7 @@
     }
 
     if (data?.session) {
-      goto('/', { replaceState: true });
+      goto('/dashboard', { replaceState: true });
       return;
     }
 
