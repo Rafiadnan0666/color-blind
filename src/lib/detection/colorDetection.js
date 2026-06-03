@@ -225,20 +225,26 @@ export function sampleRegionColor(source, x, y, w, h) {
 
   const imageData = ctx.getImageData(sx, sy, sw, sh);
   const data = imageData.data;
+  const pixelCount = (data.length / 4) | 0;
 
-  let r = 0, g = 0, b = 0;
-  const len = data.length;
-  const pixelCount = len / 4;
+  const rs = new Uint8Array(pixelCount);
+  const gs = new Uint8Array(pixelCount);
+  const bs = new Uint8Array(pixelCount);
 
-  for (let i = 0; i < len; i += 4) {
-    r += data[i];
-    g += data[i + 1];
-    b += data[i + 2];
+  for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+    rs[j] = data[i];
+    gs[j] = data[i + 1];
+    bs[j] = data[i + 2];
   }
 
-  r = Math.round(r / pixelCount);
-  g = Math.round(g / pixelCount);
-  b = Math.round(b / pixelCount);
+  rs.sort();
+  gs.sort();
+  bs.sort();
+
+  const mid = (pixelCount / 2) | 0;
+  const r = rs[mid];
+  const g = gs[mid];
+  const b = bs[mid];
 
   const name = rgbToColorName(r, g, b);
   const hex = rgbToHex(r, g, b);
@@ -252,10 +258,15 @@ export function sampleRegionColor(source, x, y, w, h) {
  * Extract the most prominent colors from an image source.
  * Downsamples, quantizes, and clusters by frequency.
  * @param {HTMLVideoElement | HTMLCanvasElement | HTMLImageElement} source
- * @param {number} [maxColors=12]
+ * @param {number} [maxColors]
+ * @param {number} [bx]
+ * @param {number} [by]
+ * @param {number} [bw]
+ * @param {number} [bh]
  * @returns {Array<{ r: number, g: number, b: number, name: string, hex: string, percentage: number, positions: Array<{x: number, y: number}> }>}
  */
-export function extractPalette(source, maxColors = 12, bx, by, bw, bh) {
+export function extractPalette(source, maxColors, bx, by, bw, bh) {
+  if (maxColors === undefined) maxColors = 12;
   if (bx !== undefined) {
     return extractPaletteFromRegion(source, maxColors, bx, by, bw, bh);
   }
@@ -300,7 +311,7 @@ function extractPaletteFull(source, maxColors = 12) {
         colorPositions.set(key, []);
       }
       const positions = colorPositions.get(key);
-      if (positions.length < 5) {
+      if (positions.length < 2) {
         positions.push({ x: px, y: py });
       }
     }
@@ -355,11 +366,13 @@ function extractPaletteFull(source, maxColors = 12) {
 }
 
 /**
- * Get a color map overlay: returns an array of pixels with their dominant color cluster.
- * Useful for highlighting which parts of the image correspond to which palette color.
  * @param {HTMLVideoElement | HTMLCanvasElement | HTMLImageElement} source
- * @param {number} [gridSize=20]
- * @returns {Array<{x: number, y: number, r: number, g: number, b: number, name: string}>}
+ * @param {number} maxColors
+ * @param {number} bx
+ * @param {number} by
+ * @param {number} bw
+ * @param {number} bh
+ * @returns {Array<{ r: number, g: number, b: number, name: string, hex: string, percentage: number, positions: Array<{x: number, y: number}> }>}
  */
 function extractPaletteFromRegion(source, maxColors, bx, by, bw, bh) {
   const cvs = sourceToCanvas(source);
@@ -368,36 +381,45 @@ function extractPaletteFromRegion(source, maxColors, bx, by, bw, bh) {
 
   const sx = Math.max(0, Math.floor(bx));
   const sy = Math.max(0, Math.floor(by));
-  const sw = Math.max(1, Math.floor(Math.min(bw, cvs.width - sx)));
-  const sh = Math.max(1, Math.floor(Math.min(bh, cvs.height - sy)));
+  const sw = Math.max(1, Math.min(Math.floor(bw), cvs.width - sx));
+  const sh = Math.max(1, Math.min(Math.floor(bh), cvs.height - sy));
 
-  const sampleSize = Math.min(sw, sh, 40);
-  const stepX = Math.max(1, Math.floor(sw / sampleSize));
-  const stepY = Math.max(1, Math.floor(sh / sampleSize));
+  const imageData = ctx.getImageData(sx, sy, sw, sh);
+  const data = imageData.data;
+
+  const stepX = Math.max(1, Math.floor(sw / 24));
+  const stepY = Math.max(1, Math.floor(sh / 24));
 
   const colorBuckets = new Map();
-  for (let py = sy; py < sy + sh; py += stepY) {
-    for (let px = sx; px < sx + sw; px += stepX) {
-      const pixel = ctx.getImageData(px, py, 1, 1).data;
-      const r = pixel[0], g = pixel[1], b = pixel[2];
+  const colorPositions = new Map();
+  for (let py = 0; py < sh; py += stepY) {
+    for (let px = 0; px < sw; px += stepX) {
+      const pi = (py * sw + px) * 4;
+      const r = data[pi], g = data[pi + 1], b = data[pi + 2];
       const qr = Math.round(r / 48) * 48;
       const qg = Math.round(g / 48) * 48;
       const qb = Math.round(b / 48) * 48;
       const key = `${qr},${qg},${qb}`;
       if (!colorBuckets.has(key)) {
         colorBuckets.set(key, { r: 0, g: 0, b: 0, count: 0 });
+        colorPositions.set(key, []);
       }
       const bucket = colorBuckets.get(key);
       bucket.r += r; bucket.g += g; bucket.b += b;
       bucket.count++;
+      const positions = colorPositions.get(key);
+      if (positions.length < 2) {
+        positions.push({ x: sx + px, y: sy + py });
+      }
     }
   }
 
-  const totalSamples = (Math.floor(sh / stepY)) * (Math.floor(sw / stepX));
+  const totalSamples = Math.ceil(sh / stepY) * Math.ceil(sw / stepX);
   if (totalSamples === 0) return [];
 
   const sorted = Array.from(colorBuckets.entries())
     .map(([key, bucket]) => ({
+      key,
       r: Math.round(bucket.r / bucket.count),
       g: Math.round(bucket.g / bucket.count),
       b: Math.round(bucket.b / bucket.count),
@@ -416,7 +438,8 @@ function extractPaletteFromRegion(source, maxColors, bx, by, bw, bh) {
     seen.add(qKey);
     const name = rgbToColorName(color.r, color.g, color.b);
     const hex = rgbToHex(color.r, color.g, color.b);
-    palette.push({ r: color.r, g: color.g, b: color.b, name, hex, percentage: color.percentage });
+    const positions = colorPositions.get(color.key) || [];
+    palette.push({ r: color.r, g: color.g, b: color.b, name, hex, percentage: color.percentage, positions });
   }
 
   palette.sort((a, b) => b.percentage - a.percentage);

@@ -61,14 +61,20 @@
         {#if $isAuthLoading}
           <div class="brut-spinner"></div>
         {:else if $session}
-          <a href="/detects" class="brut-nav-link" class:brut-nav-link-active={isActive('/detects')}>
-            Scan
-          </a>
-          <a href="/dashboard" class="brut-nav-link" class:brut-nav-link-active={isActive('/dashboard')}>
-            Dashboard
-          </a>
-          <span class="w-px h-6 bg-neo-black"></span>
-          <div class="flex items-center gap-2 ml-2">
+            <a href="/detects" class="brut-nav-link" class:brut-nav-link-active={isActive('/detects')}>
+              Scan
+            </a>
+            <a href="/ocr" class="brut-nav-link" class:brut-nav-link-active={isActive('/ocr')}>
+              OCR
+            </a>
+            <a href="/assistant" class="brut-nav-link" class:brut-nav-link-active={isActive('/assistant')}>
+              Assistant
+            </a>
+            <a href="/dashboard" class="brut-nav-link" class:brut-nav-link-active={isActive('/dashboard')}>
+              Dashboard
+            </a>
+            <span class="w-px h-6 bg-neo-black"></span>
+            <div class="flex items-center gap-2 ml-2">
             <div class="brut-avatar w-8 h-8 text-brut-sm">
               {($user?.email ?? '?')[0].toUpperCase()}
             </div>
@@ -104,6 +110,12 @@
             <a href="/detects" class="brut-nav-link" class:brut-nav-link-active={isActive('/detects')}>
               Scan
             </a>
+            <a href="/ocr" class="brut-nav-link" class:brut-nav-link-active={isActive('/ocr')}>
+              OCR
+            </a>
+            <a href="/assistant" class="brut-nav-link" class:brut-nav-link-active={isActive('/assistant')}>
+              Assistant
+            </a>
             <a href="/dashboard" class="brut-nav-link" class:brut-nav-link-active={isActive('/dashboard')}>
               Dashboard
             </a>
@@ -112,6 +124,12 @@
             </a>
             <a href="/favorites" class="brut-nav-link" class:brut-nav-link-active={isActive('/favorites')}>
               Favorites
+            </a>
+            <a href="/saved-colors" class="brut-nav-link" class:brut-nav-link-active={isActive('/saved-colors')}>
+              Saved Colors
+            </a>
+            <a href="/saved-objects" class="brut-nav-link" class:brut-nav-link-active={isActive('/saved-objects')}>
+              Saved Objects
             </a>
             <button onclick={handleSignOut} class="brut-btn-danger text-sm">
               Logout

@@ -6,7 +6,7 @@
   const modes = [
     { id: 'fusion', icon: 'fa-compress-alt', label: 'Fusion', desc: 'All engines combined' },
     { id: 'coco', icon: 'fa-globe', label: 'COCO', desc: '90-class general objects' },
-    { id: 'ssdlens', icon: 'fa-apple-alt', label: 'Fruit', desc: 'Ripe/unripe fruit' },
+    { id: 'ssdlens', icon: 'fa-apple-alt', label: 'Objects', desc: 'General object detection' },
     { id: 'traffic_light', icon: 'fa-traffic-light', label: 'Traffic', desc: 'Red, green, yellow' },
     { id: 'currency', icon: 'fa-money-bill-wave', label: 'Currency', desc: '7 rupiah notes' },
     { id: 'medicine', icon: 'fa-pills', label: 'Medicine', desc: '4 pill types' },

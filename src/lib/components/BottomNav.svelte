@@ -48,7 +48,7 @@
     border-top: 4px solid #0a0a0a;
     display: flex;
     align-items: stretch;
-    z-index: 100;
+    z-index: 250;
     box-shadow: 0 -4px 0 #0a0a0a;
   }
 

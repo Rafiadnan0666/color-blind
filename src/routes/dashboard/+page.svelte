@@ -42,12 +42,44 @@
               <i class="fas fa-eye text-blue-600 mr-2"></i> New Detection
             </h2>
             <p class="font-brut text-brut-sm text-neo-darkgray uppercase">
-              Upload and analyze images for color blindness
+              Detect and analyze objects & colors
             </p>
           </div>
         </div>
         <a href="/detects" class="brut-btn-primary inline-block mt-4">
           Start Detecting
+        </a>
+      </div>
+
+      <div class="brut-card border-3 border-neo-black bg-purple-100 hover:shadow-brut-lg transition-all">
+        <div class="flex items-start justify-between mb-4">
+          <div>
+            <h2 class="brut-heading text-brut-2xl mb-2">
+              <i class="fas fa-file-lines text-purple-600 mr-2"></i> OCR Scanner
+            </h2>
+            <p class="font-brut text-brut-sm text-neo-darkgray uppercase">
+              Extract text from images
+            </p>
+          </div>
+        </div>
+        <a href="/ocr" class="brut-btn inline-block mt-4">
+          Open OCR
+        </a>
+      </div>
+
+      <div class="brut-card border-3 border-neo-black bg-teal-100 hover:shadow-brut-lg transition-all">
+        <div class="flex items-start justify-between mb-4">
+          <div>
+            <h2 class="brut-heading text-brut-2xl mb-2">
+              <i class="fas fa-robot text-teal-600 mr-2"></i> AI Assistant
+            </h2>
+            <p class="font-brut text-brut-sm text-neo-darkgray uppercase">
+              Ask about colors, detection & accessibility
+            </p>
+          </div>
+        </div>
+        <a href="/assistant" class="brut-btn inline-block mt-4">
+          Chat Now
         </a>
       </div>
 
@@ -58,7 +90,7 @@
               <i class="fas fa-history text-pink-600 mr-2"></i> Detection History
             </h2>
             <p class="font-brut text-brut-sm text-neo-darkgray uppercase">
-              View your previous analysis results
+              View your previous scans
             </p>
           </div>
         </div>
@@ -71,16 +103,16 @@
         <div class="flex items-start justify-between mb-4">
           <div>
             <h2 class="brut-heading text-brut-2xl mb-2">
-              <i class="fas fa-book text-green-600 mr-2"></i> Accessibility Guide
+              <i class="fas fa-palette text-green-600 mr-2"></i> Saved Colors
             </h2>
             <p class="font-brut text-brut-sm text-neo-darkgray uppercase">
-              Learn how to make your designs color-blind friendly
+              Browse your saved color palette
             </p>
           </div>
         </div>
-        <button class="brut-btn inline-block mt-4">
-          Read Guide
-        </button>
+        <a href="/saved-colors" class="brut-btn inline-block mt-4">
+          View Colors
+        </a>
       </div>
 
       <div class="brut-card border-3 border-neo-black bg-orange-100 hover:shadow-brut-lg transition-all">
@@ -90,7 +122,7 @@
               <i class="fas fa-cog text-orange-600 mr-2"></i> Account Settings
             </h2>
             <p class="font-brut text-brut-sm text-neo-darkgray uppercase">
-              Manage your account preferences
+              Profile, notifications & preferences
             </p>
           </div>
         </div>

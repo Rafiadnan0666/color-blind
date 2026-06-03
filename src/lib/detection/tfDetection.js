@@ -25,13 +25,10 @@ export async function loadTFModel(type = 'lite_mobilenet_v2') {
   try {
     await tf.ready();
     const cocoSsd = await import('@tensorflow-models/coco-ssd');
-    const config = type === 'lite_mobilenet_v2' || type === 'mobilenet_v2'
-      ? { base: type }
-      : { base: type };
-    model = await cocoSsd.load(config);
+    model = await cocoSsd.load(/** @type {any} */({ base: 'lite_mobilenet_v2', scoreThreshold: 0.3 }));
     return model;
   } catch (e) {
-    console.warn('COCO-SSD model not loaded:', e);
+    console.error('[MODEL_LOAD_ERROR] COCO-SSD:', e?.message || e);
     return null;
   }
 }
@@ -40,7 +37,7 @@ export async function loadTFLocalModel(modelUrl = '/model_coco/model.json') {
   try {
     await tf.ready();
     const cocoSsd = await import('@tensorflow-models/coco-ssd');
-    model = await cocoSsd.load({ base: modelUrl });
+    model = await cocoSsd.load(/** @type {any} */({ base: 'lite_mobilenet_v2', scoreThreshold: 0.3 }));
     loadAttempted = true;
     return model;
   } catch (e) {
@@ -50,9 +47,12 @@ export async function loadTFLocalModel(modelUrl = '/model_coco/model.json') {
 }
 
 export async function detectTF(source) {
-  if (!model) return [];
+  if (!model) { console.warn('TF: model not loaded'); return []; }
   try {
     const predictions = await model.detect(source, 20);
+    if (predictions.length > 0) {
+      const topScore = Math.max(...predictions.map(p => p.score));
+    }
     return predictions.map((p) => ({
       x1: p.bbox[0],
       y1: p.bbox[1],

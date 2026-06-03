@@ -71,9 +71,9 @@
     <div class="items-list">
       {#each items as item (item.id)}
         <div class="fav-item" transition:slide>
-          <div class="fav-color" style="background: {item.color_hex || '#888'}"></div>
+          <div class="fav-color" style="background: {item.value || '#888'}"></div>
           <div class="fav-info">
-            <div class="font-brut text-brut-sm capitalize">{item.label}</div>
+            <div class="font-brut text-brut-sm capitalize">{item.type}</div>
             {#if item.notes}
               <div class="text-brut-xs text-neo-darkgray truncate">{item.notes}</div>
             {/if}

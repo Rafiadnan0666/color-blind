@@ -57,12 +57,12 @@
 
   function formatDate(iso) {
     if (!iso) return '';
-    const d = new Date(iso);
-    const diff = Date.now() - d;
+    const date = new Date(iso);
+    const diff = Date.now() - date.getTime();
     if (diff < 60000) return 'Just now';
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-    return d.toLocaleDateString('en-ID', { day: 'numeric', month: 'short' });
+    return date.toLocaleDateString('en-ID', { day: 'numeric', month: 'short' });
   }
 
   function getModeIcon(mode) {

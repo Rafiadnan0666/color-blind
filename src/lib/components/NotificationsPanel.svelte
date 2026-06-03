@@ -24,7 +24,7 @@
   async function markRead(id) {
     try {
       await notifications.markRead(id);
-      items = items.map(i => i.id === id ? { ...i, is_read: true } : i);
+      items = items.map(i => i.id === id ? { ...i, isread: true } : i);
     } catch (e) {
       console.warn('Could not mark read:', e);
     }
@@ -33,7 +33,7 @@
   async function markAllRead() {
     try {
       await notifications.markAllRead();
-      items = items.map(i => ({ ...i, is_read: true }));
+      items = items.map(i => ({ ...i, isread: true }));
     } catch (e) {
       console.warn('Could not mark all read:', e);
     }
@@ -41,12 +41,12 @@
 
   function formatDate(iso) {
     if (!iso) return '';
-    const d = new Date(iso);
-    const diff = Date.now() - d;
+    const date = new Date(iso);
+    const diff = Date.now() - date.getTime();
     if (diff < 60000) return 'Just now';
     if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-    return d.toLocaleDateString('en-ID', { day: 'numeric', month: 'short' });
+    return date.toLocaleDateString('en-ID', { day: 'numeric', month: 'short' });
   }
 
   function getTypeIcon(type) {
@@ -66,7 +66,7 @@
     <div class="font-brut text-brut-lg uppercase">
       <i class="fas fa-bell mr-2 text-neo-pink"></i> Notifications
     </div>
-    {#if items.some(i => !i.is_read)}
+    {#if items.some(i => !i.isread)}
       <button class="brut-btn text-brut-xs px-3 py-1.5" onclick={markAllRead}>
         <i class="fas fa-check-double mr-1"></i> Mark All Read
       </button>
@@ -89,21 +89,21 @@
       {#each items as item (item.id)}
         <div
           class="notif-item"
-          class:unread={!item.is_read}
+          class:unread={!item.isread}
           role="button"
           tabindex="0"
           onclick={() => markRead(item.id)}
           onkeydown={(e) => { if (e.key === 'Enter') markRead(item.id); }}
           transition:fly={{ y: 10, duration: 200 }}
         >
-          <div class="notif-icon" class:unread-icon={!item.is_read}>
+          <div class="notif-icon" class:unread-icon={!item.isread}>
             <i class="fas {getTypeIcon(item.type)}"></i>
           </div>
           <div class="notif-body">
             <div class="font-brut text-brut-xs uppercase">{item.title}</div>
             <div class="text-brut-xs text-neo-darkgray">{item.message}</div>
           </div>
-          <div class="notif-time text-brut-xs">{formatDate(item.created_at)}</div>
+          <div class="notif-time text-brut-xs">{formatDate(item.createdat)}</div>
         </div>
       {/each}
     </div>

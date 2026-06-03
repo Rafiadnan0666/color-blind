@@ -69,13 +69,15 @@ const MODELS = {
 };
 
 const INPUT_SIZE = 640;
-const CONF_THRESHOLD = 0.35;
+const CONF_THRESHOLD = 0.25;
 const IOU_THRESHOLD = 0.45;
 
 let sessions = {};
 let loadAttempted = {};
 let _origW = 0, _origH = 0;
 let _scaleX = 1, _scaleY = 1;
+let _padX = 0, _padY = 0;
+let preprocessCanvas = null;
 
 export async function loadYoloModel(modelKey = 'traffic_light') {
   if (loadAttempted[modelKey]) return;
@@ -84,11 +86,11 @@ export async function loadYoloModel(modelKey = 'traffic_light') {
   if (!cfg) return;
   try {
     sessions[modelKey] = await ort.InferenceSession.create(cfg.path, {
-      executionProviders: ['webgl', 'wasm', 'cpu'],
+      executionProviders: ['wasm', 'webgl'],
       graphOptimizationLevel: 'all',
     });
   } catch (e) {
-    console.warn(`YOLO "${modelKey}" not loaded:`, e.message);
+    console.error(`[MODEL_LOAD_ERROR] YOLO[${modelKey}]:`, e?.message || e);
   }
 }
 
@@ -99,61 +101,88 @@ export async function loadAllYoloModels() {
 function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
 
 function preprocess(source) {
-  const cvs = document.createElement('canvas');
-  let ctx;
+  if (!preprocessCanvas) preprocessCanvas = document.createElement('canvas');
+  const cvs = preprocessCanvas;
+  let srcW, srcH, tempCtx;
   if (source instanceof HTMLVideoElement) {
     cvs.width = source.videoWidth; cvs.height = source.videoHeight;
-    ctx = cvs.getContext('2d');
-    ctx.drawImage(source, 0, 0);
+    tempCtx = cvs.getContext('2d');
+    tempCtx.drawImage(source, 0, 0);
+    srcW = cvs.width; srcH = cvs.height;
   } else if (source instanceof HTMLCanvasElement) {
-    ctx = source.getContext('2d');
+    tempCtx = source.getContext('2d');
+    srcW = source.width; srcH = source.height;
   } else if (source instanceof HTMLImageElement) {
     cvs.width = source.naturalWidth; cvs.height = source.naturalHeight;
-    ctx = cvs.getContext('2d');
-    ctx.drawImage(source, 0, 0);
+    tempCtx = cvs.getContext('2d');
+    tempCtx.drawImage(source, 0, 0);
+    srcW = cvs.width; srcH = cvs.height;
   } else {
     throw new Error('Unsupported source');
   }
-  const imgData = ctx.getImageData(0, 0, cvs.width, cvs.height);
-  _origW = imgData.width; _origH = imgData.height;
-  _scaleX = _origW / INPUT_SIZE;
-  _scaleY = _origH / INPUT_SIZE;
+  _origW = srcW; _origH = srcH;
+  _scaleX = Math.min(INPUT_SIZE / srcW, INPUT_SIZE / srcH);
+  const newW = Math.round(srcW * _scaleX);
+  const newH = Math.round(srcH * _scaleX);
+  const resized = document.createElement('canvas');
+  resized.width = INPUT_SIZE; resized.height = INPUT_SIZE;
+  const rctx = resized.getContext('2d');
+  rctx.fillStyle = '#727272';
+  rctx.fillRect(0, 0, INPUT_SIZE, INPUT_SIZE);
+  _padX = Math.round((INPUT_SIZE - newW) / 2);
+  _padY = Math.round((INPUT_SIZE - newH) / 2);
+  rctx.drawImage(cvs, 0, 0, srcW, srcH, _padX, _padY, newW, newH);
+  const imgData = rctx.getImageData(0, 0, INPUT_SIZE, INPUT_SIZE);
   const pixels = imgData.data;
   const float32Data = new Float32Array(3 * INPUT_SIZE * INPUT_SIZE);
-  for (let y = 0; y < INPUT_SIZE; y++) {
-    for (let x = 0; x < INPUT_SIZE; x++) {
-      const srcY = Math.min(Math.round(y * _scaleY), _origH - 1);
-      const srcX = Math.min(Math.round(x * _scaleX), _origW - 1);
-      const si = (srcY * _origW + srcX) * 4;
-      float32Data[y * INPUT_SIZE + x] = pixels[si] / 255;
-      float32Data[INPUT_SIZE * INPUT_SIZE + y * INPUT_SIZE + x] = pixels[si + 1] / 255;
-      float32Data[2 * INPUT_SIZE * INPUT_SIZE + y * INPUT_SIZE + x] = pixels[si + 2] / 255;
-    }
+  for (let i = 0; i < INPUT_SIZE * INPUT_SIZE; i++) {
+    const si = i * 4;
+    float32Data[i] = pixels[si] / 255;
+    float32Data[INPUT_SIZE * INPUT_SIZE + i] = pixels[si + 1] / 255;
+    float32Data[2 * INPUT_SIZE * INPUT_SIZE + i] = pixels[si + 2] / 255;
   }
   return new ort.Tensor('float32', float32Data, [1, 3, INPUT_SIZE, INPUT_SIZE]);
 }
 
 function decodeDetections(output, classNames) {
   const numClasses = classNames.length;
-  const numDetections = output.dims[2];
   const data = output.data;
+  const dims = output.dims;
   const dets = [];
+  let numDetections, stride, bboxOffset;
+  if (dims.length === 3 && dims[0] === 1) {
+    if (dims[1] === numClasses + 4) {
+      numDetections = dims[2];
+      stride = numDetections;
+      bboxOffset = 0;
+    } else if (dims[2] === numClasses + 4) {
+      numDetections = dims[1];
+      stride = dims[2];
+      bboxOffset = 0;
+    } else {
+      return [];
+    }
+  } else if (dims.length === 2 && dims[0] === 1) {
+    numDetections = dims[1];
+    stride = numClasses + 4;
+  } else {
+    return [];
+  }
   for (let i = 0; i < numDetections; i++) {
-    const cx = data[i];
-    const cy = data[1 * numDetections + i];
-    const w = data[2 * numDetections + i];
-    const h = data[3 * numDetections + i];
-    let maxScore = 0;
-    let bestClass = -1;
+    const cx = data[bboxOffset + i];
+    const cy = data[bboxOffset + 1 * stride + i];
+    const w = data[bboxOffset + 2 * stride + i];
+    const h = data[bboxOffset + 3 * stride + i];
+    let maxScore = 0, bestClass = -1;
     for (let c = 0; c < numClasses; c++) {
-      const score = sigmoid(data[(4 + c) * numDetections + i]);
+      const score = sigmoid(data[bboxOffset + (4 + c) * stride + i]);
       if (score > maxScore) { maxScore = score; bestClass = c; }
     }
     if (maxScore < CONF_THRESHOLD) continue;
-    const x1 = Math.max(0, (cx - w / 2) * _scaleX);
-    const y1 = Math.max(0, (cy - h / 2) * _scaleY);
-    const x2 = Math.min(_origW, (cx + w / 2) * _scaleX);
-    const y2 = Math.min(_origH, (cy + h / 2) * _scaleY);
+    const x1 = Math.max(0, (cx - w / 2 - _padX) / _scaleX);
+    const y1 = Math.max(0, (cy - h / 2 - _padY) / _scaleX);
+    const x2 = Math.min(_origW, (cx + w / 2 - _padX) / _scaleX);
+    const y2 = Math.min(_origH, (cy + h / 2 - _padY) / _scaleX);
     dets.push({ x1, y1, x2, y2, width: x2 - x1, height: y2 - y1, score: maxScore, classId: bestClass, label: classNames[bestClass], model: 'yolo' });
   }
   dets.sort((a, b) => b.score - a.score);
@@ -176,7 +205,7 @@ function iou(a, b) {
 }
 
 export async function detectYolo(source, modelKey = 'traffic_light') {
-  if (!sessions[modelKey]) return [];
+  if (!sessions[modelKey]) { console.warn(`YOLO[${modelKey}]: session not loaded`); return []; }
   const session = sessions[modelKey];
   const t = preprocess(source);
   const feeds = { [session.inputNames[0]]: t };

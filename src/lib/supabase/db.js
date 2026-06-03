@@ -293,7 +293,9 @@ export const userSettings = {
   async upsert(settings) {
     const userid = await uid();
     if (!userid) throw new Error('auth_required');
-    const { error } = await supabase().from('UserSettings').upsert([{ ...settings, userid }]);
+    const { data: existing } = await supabase().from('UserSettings').select('id').eq('userid', userid).maybeSingle();
+    const payload = existing ? { ...settings, userid, id: existing.id } : { ...settings, userid };
+    const { error } = await supabase().from('UserSettings').upsert([payload], { onConflict: 'userid' });
     if (error) throw error;
   },
 };

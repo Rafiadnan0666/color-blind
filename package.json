@@ -59,6 +59,7 @@
 		"@supabase/ssr": "^0.10.3",
 		"@supabase/supabase-js": "^2.106.2",
 		"@tensorflow-models/coco-ssd": "^2.2.3",
+		"@tensorflow-models/qna": "^1.0.2",
 		"@tensorflow/tfjs": "^4.22.0",
 		"@tensorflow/tfjs-backend-webgl": "^4.22.0",
 		"onnxruntime-web": "^1.26.0",

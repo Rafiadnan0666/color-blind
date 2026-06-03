@@ -24,7 +24,7 @@ class YOLOInferenceEngine {
     async load() {
         try {
             this.session = await ort.InferenceSession.create(this.modelPath, {
-                executionProviders: ['webgl', 'wasm', 'cpu'],
+                executionProviders: ['wasm', 'webgl', 'cpu'],
                 graphOptimizationLevel: 'all',
             });
             this.inputName = this.session.inputNames[0];
@@ -159,10 +159,10 @@ class YOLOInferenceEngine {
 
             if (maxScore < this.confThreshold) continue;
 
-            let x1 = (cx - w / 2) * this.inputSize;
-            let y1 = (cy - h / 2) * this.inputSize;
-            let x2 = (cx + w / 2) * this.inputSize;
-            let y2 = (cy + h / 2) * this.inputSize;
+            let x1 = cx - w / 2;
+            let y1 = cy - h / 2;
+            let x2 = cx + w / 2;
+            let y2 = cy + h / 2;
 
             x1 = (x1 - this._padX) / this._scale;
             y1 = (y1 - this._padY) / this._scale;

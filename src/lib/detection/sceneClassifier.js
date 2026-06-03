@@ -23,6 +23,9 @@ export async function loadSceneModel() {
  * @returns {Promise<{scene: string, confidence: number, allScores?: Record<string, number>}>}
  */
 export async function classifyScene(source) {
+  if (!model) {
+    await loadSceneModel();
+  }
   if (model) {
     return classifyWithModel(source);
   }
