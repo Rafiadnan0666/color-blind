@@ -1,0 +1,4 @@
+garden
+indoor_kitchen
+orchard
+supermarket

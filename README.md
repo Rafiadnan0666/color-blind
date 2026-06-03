@@ -1,65 +1,86 @@
-# Svelte library
+# ClrBlind — Color Blindness Detection & Accessibility App
 
-Everything you need to build a Svelte library, powered by [`sv`](https://npmjs.com/package/sv).
+A fully client-side browser ML app that identifies objects and analyzes colors for people with color vision deficiency (CVD).
 
-Read more about creating a library [in the docs](https://svelte.dev/docs/kit/packaging).
+## Features
 
-## Creating a project
+- **8 Detection Modes**: Fusion, COCO, Traffic Light, Currency, Medicine, Products, Accessibility, Fruit
+- **Color Analysis**: Name, hex, RGB, HSL, palette extraction, contour detection
+- **CVD Simulation**: Protanopia, Deuteranopia, Tritanopia views
+- **Scene Classification**: Identifies garden, kitchen, orchard, supermarket
+- **All ML runs in-browser** — no server calls, no data leakage
 
-If you're seeing this, you've probably already done this step. Congrats!
+## ML Architecture
 
-```sh
-# create a new project in the current directory
-npx sv create
+| Mode | Model | Backend |
+|------|-------|---------|
+| Fusion / COCO / Fruit | COCO-SSD | TensorFlow.js (MobileNetV2) |
+| Traffic Light | SSD MobileNetV2 | TensorFlow.js |
+| Currency (7 rupiah) | SSD MobileNetV2 | TensorFlow.js |
+| Medicine (4 pills) | SSD MobileNetV2 | TensorFlow.js |
+| Products (44 Indian) | SSD MobileNetV2 | TensorFlow.js |
+| Accessibility (4 signs) | SSD MobileNetV2 | TensorFlow.js |
 
-# create a new project in my-app
-npx sv create my-app
-```
+**All custom models use MobileNetV2 backbone** (converted from YOLOv8 ONNX) for faster, lighter browser inference.
 
-To recreate this project with the same configuration:
+## Quick Start
 
-```sh
-# recreate this project
-npx sv@0.15.3 create --template library --types jsdoc --install npm color-blind
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
+```bash
+npm install
 npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
 ```
 
-Everything inside `src/lib` is part of your library, everything inside `src/routes` can be used as a showcase or preview app.
+## Training Custom Models
 
-## Building
+See `training/README.md` for the JupyterLab-based training pipeline:
 
-To build your library:
-
-```sh
-npm pack
+```bash
+cd training
+pip install -r requirements.txt
+jupyter lab
 ```
 
-To create a production version of your showcase app:
+Opens `notebooks/01_mobilenetv2_training_pipeline.ipynb` — runs on CPU or GPU, exports directly to TFJS.
 
-```sh
-npm run build
+## Dataset Sources
+
+| Model | Source | Link |
+|-------|--------|------|
+| Accessibility | Kaggle — Road Sign Detection | [andrewmvd/road-sign-detection](https://www.kaggle.com/datasets/andrewmvd/road-sign-detection) |
+| Traffic Light | Roboflow | [Traffic Light Dataset](https://universe.roboflow.com/traffic-light-detection-qsrxn/traffic-light-oq7uj) |
+| Currency | Custom | Collect Indonesian rupiah images |
+| Medicine | Custom | Collect pill packaging images |
+| Products | Custom | Collect Indian FMCG product images |
+
+## Project Structure
+
+```
+src/
+  lib/
+    detection/
+      mobilenetDetection.js   — MobileNetV2 TFJS inference engine
+      tfDetection.js          — COCO-SSD wrapper
+      objectDetection.js      — Detection orchestrator
+      sceneClassifier.js      — Scene classification
+      colorDetection.js       — Color analysis utilities
+      yoloDetection.js        — [Deprecated] YOLO ONNX fallback
+  routes/
+    detects/+page.svelte      — Main detection UI
+training/
+  notebooks/                  — JupyterLab training notebooks
+  configs/                    — Dataset YAML configs
+  datasets/                   — Downloaded/prepared datasets
+  exported_models/            — SavedModel checkpoints
+static/
+  model_mobilenet/            — TFJS deployed models
+  model_onnx/                 — [Legacy] YOLO ONNX models
+  model_scene/                — Scene classifier
 ```
 
-You can preview the production build with `npm run preview`.
+## Tech Stack
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
-
-## Publishing
-
-Go into the `package.json` and give your package the desired name through the `"name"` option. Also consider adding a `"license"` field and point it to a `LICENSE` file which you can create from a template (one popular option is the [MIT license](https://opensource.org/license/mit/)).
-
-To publish your library to [npm](https://www.npmjs.com):
-
-```sh
-npm publish
-```
+- **SvelteKit 2** — Full-stack framework
+- **TensorFlow.js 4** — ML inference in browser
+- **Tailwind CSS** — Neo-brut design system
+- **Supabase** — Auth, DB, notifications
+- **Prisma** — PostgreSQL ORM

@@ -11,6 +11,7 @@
 
   body {
     @apply bg-neo-white text-neo-black;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   input:-webkit-autofill,
@@ -21,6 +22,11 @@
     -webkit-box-shadow: 0 0 0px 1000px #fff inset;
     transition: background-color 5000s ease-in-out 0s;
   }
+
+  * { scrollbar-width: thin; scrollbar-color: #ccc transparent; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #ccc; border: 2px solid #0a0a0a; }
 }
 
 @layer components {
@@ -130,5 +136,30 @@
 @layer utilities {
   .brut-stack > * + * {
     margin-top: 1rem;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.anim-pulse-glow { animation: pulse-glow 1.5s ease-in-out infinite; }
+.anim-slide-up { animation: slide-up 0.25s ease-out; }
+.anim-scale-in { animation: scale-in 0.2s ease-out; }
+
+@media (hover: none) {
+  .brut-btn:hover, .brut-btn-primary:hover {
+    transform: none;
   }
 }
