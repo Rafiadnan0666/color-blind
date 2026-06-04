@@ -4,60 +4,11 @@ import '@tensorflow/tfjs-backend-webgl';
 const INPUT_SIZE = 320;
 
 const MODELS = {
-  traffic_light: {
-    path: '/model_mobilenet/traffic_light/model.json',
-    classes: ['red', 'green', 'yellow'],
-    colors: { red: '#ff0033', green: '#00cc44', yellow: '#ffcc00' },
-    displayNames: { red: 'Red Light', green: 'Green Light', yellow: 'Yellow Light' },
-  },
-  currency: {
-    path: '/model_mobilenet/currency/model.json',
-    classes: ['rp1000', 'rp2000', 'rp5000', 'rp10000', 'rp20000', 'rp50000', 'rp100000'],
-    colors: { rp1000: '#8B4513', rp2000: '#2E8B57', rp5000: '#4169E1', rp10000: '#8B008B', rp20000: '#006400', rp50000: '#B22222', rp100000: '#FF4500' },
-    displayNames: { rp1000: 'Rp 1.000', rp2000: 'Rp 2.000', rp5000: 'Rp 5.000', rp10000: 'Rp 10.000', rp20000: 'Rp 20.000', rp50000: 'Rp 50.000', rp100000: 'Rp 100.000' },
-  },
   medicine: {
     path: '/model_mobilenet/medicine/model.json',
     classes: ['paracetamol', 'panadol', 'amoxicillin', 'vitamin_c'],
     colors: { paracetamol: '#87CEEB', panadol: '#FFB6C1', amoxicillin: '#98FB98', vitamin_c: '#FFD700' },
     displayNames: { paracetamol: 'Paracetamol', panadol: 'Panadol', amoxicillin: 'Amoxicillin', vitamin_c: 'Vitamin C' },
-  },
-  local_products: {
-    path: '/model_mobilenet/local_products/model.json',
-    classes: [
-      '5_star', 'aashirwaad_atta', 'all_out_coil', 'all_out_refill', 'amul_butter',
-      'beardo', 'bisleri', 'boost', 'bournvita', 'bru',
-      'cream_and_onion_lays', 'dettol', 'fortune_atta', 'fortune_bottle', 'fortune_can',
-      'fortune_pouch', 'harpic_bathroom_cleaner', 'harpic_toilet_cleaner', 'horlicks', 'kikat',
-      'kinley', 'krackjack', 'limea', 'maggie', 'marie_gold',
-      'mirinda', 'munch', 'nestle', 'odonil_green', 'odonil_purple',
-      'odonil_red', 'parle_g', 'rin_bar', 'salted_lays', 'santoor',
-      'spicy_masala_lays', 'sprite', 'stayfree', 'thumbs_up', 'tomato_lays',
-      'vim_bar', 'whisper', 'wildstone', 'yippee',
-    ],
-    colors: {},
-    displayNames: {
-      '5_star': '5 Star', 'aashirwaad_atta': 'Aashirwaad Atta', 'all_out_coil': 'All Out Coil',
-      'all_out_refill': 'All Out Refill', 'amul_butter': 'Amul Butter',
-      beardo: 'Beardo', bisleri: 'Bisleri', boost: 'Boost', bournvita: 'Bournvita', bru: 'Bru',
-      'cream_and_onion_lays': 'Cream & Onion Lays', dettol: 'Dettol',
-      'fortune_atta': 'Fortune Atta', 'fortune_bottle': 'Fortune Bottle', 'fortune_can': 'Fortune Can',
-      'fortune_pouch': 'Fortune Pouch', 'harpic_bathroom_cleaner': 'Harpic Bathroom',
-      'harpic_toilet_cleaner': 'Harpic Toilet', horlicks: 'Horlicks', kikat: 'KitKat',
-      kinley: 'Kinley', krackjack: 'KrackJack', limea: 'Limea', maggie: 'Maggi',
-      marie_gold: 'Marie Gold', mirinda: 'Mirinda', munch: 'Munch', nestle: 'Nestlé',
-      odonil_green: 'Odonil Green', odonil_purple: 'Odonil Purple', odonil_red: 'Odonil Red',
-      parle_g: 'Parle-G', rin_bar: 'Rin Bar', salted_lays: 'Salted Lays',
-      santoor: 'Santoor', spicy_masala_lays: 'Spicy Masala Lays', sprite: 'Sprite',
-      stayfree: 'Stayfree', thumbs_up: 'Thumbs Up', tomato_lays: 'Tomato Lays',
-      vim_bar: 'Vim Bar', whisper: 'Whisper', wildstone: 'WildStone', yippee: 'Yippee',
-    },
-  },
-  accessibility: {
-    path: '/model_mobilenet/accessibility/model.json',
-    classes: ['crosswalk', 'speedlimit', 'trafficlight'],
-    colors: { trafficlight: '#ffcc00', crosswalk: '#00ccff', speedlimit: '#ff9900' },
-    displayNames: { crosswalk: 'Crosswalk', speedlimit: 'Speed Limit', trafficlight: 'Traffic Light' },
   },
 };
 
@@ -73,11 +24,14 @@ function hashColor(str) {
   return `hsl(${Math.abs(hash) % 360}, 70%, 55%)`;
 }
 
-export async function loadMobileNetModel(modelKey = 'traffic_light') {
+export async function loadMobileNetModel(modelKey = 'medicine') {
   if (loadAttempted[modelKey]) return;
   loadAttempted[modelKey] = true;
   const cfg = MODELS[modelKey];
-  if (!cfg) return;
+  if (!cfg) {
+    console.warn(`[MODEL_CONFIG_ERROR] Unknown MobileNet model: ${modelKey}`);
+    return;
+  }
   try {
     await tf.ready();
     sessions[modelKey] = await tf.loadGraphModel(cfg.path);
@@ -90,13 +44,17 @@ export async function loadAllMobileNetModels() {
   await Promise.allSettled(Object.keys(MODELS).map(k => loadMobileNetModel(k)));
 }
 
-export async function detectMobileNet(source, modelKey = 'traffic_light') {
+export async function detectMobileNet(source, modelKey = 'medicine') {
   if (!sessions[modelKey]) {
     console.warn(`MobileNetV2[${modelKey}]: model not loaded`);
     return [];
   }
   const session = sessions[modelKey];
   const cfg = MODELS[modelKey];
+  if (!cfg) {
+    console.warn(`MobileNetV2[${modelKey}]: model configuration not found`);
+    return [];
+  }
   // Add background class (last index) for SSD model compatibility
   const classNames = [...cfg.classes, '__background__'];
 

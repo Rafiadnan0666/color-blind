@@ -31,7 +31,7 @@ export async function loadModel() {
     try {
       await loadTFModel();
     } catch (e) {
-      console.error('[MODEL_LOAD_ERROR] COCO-SSD:', e?.message || e);
+      console.error('[MODEL_LOAD_ERROR] MobileNetV2:', e?.message || e);
     }
   }
 }
@@ -69,6 +69,7 @@ export function pickNearestCenter(dets, cw, ch) {
     const score = d.score / (1 + dist / Math.max(cw, ch)) * Math.min((d.width * d.height) / (cw * ch * 0.5), 1);
     if (score > bestScore) { bestScore = score; best = d; }
   }
+  if (!best && dets.length > 0) best = dets[0];
   return best;
 }
 

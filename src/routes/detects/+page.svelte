@@ -1,7 +1,7 @@
 <script>
   import { onMount, tick } from 'svelte';
   import { fly, scale } from 'svelte/transition';
-  import { loadModel, detectObjects, getColor } from '$lib/detection/objectDetection';
+  import { getColor } from '$lib/detection/objectDetection';
   import { loadTFModel, detectTF, getTFColor } from '$lib/detection/tfDetection';
   import { loadMobileNetModel, loadAllMobileNetModels, detectMobileNet, getMobileNetColor, getMobileNetModelKeys } from '$lib/detection/mobilenetDetection';
   import { sampleRegionColor, extractPalette, detectContour } from '$lib/detection/colorDetection';
@@ -35,8 +35,8 @@
 
   let mobilenetRotationIndex = 0;
   let fusionRotationIndex = 0;
-  const allModels = ['fusion', 'coco', 'ssdlens', 'traffic_light', 'currency', 'medicine', 'local_products', 'accessibility'];
-  const mobilenetModels = ['traffic_light', 'currency', 'medicine', 'local_products', 'accessibility'];
+  const allModels = ['fusion', 'coco', 'ssdlens', 'medicine'];
+  const mobilenetModels = ['medicine'];
   const fusionModels = ['coco', ...mobilenetModels];
   let cachedFrameCanvas = null;
   let cachedDetectFrameCanvas = null;
@@ -78,7 +78,7 @@
     });
   }
 
-  const LOAD_STAGES = ['Initializing camera...', 'Loading detection models...', 'Loading MobileNetV2 model...', 'Warming up...', 'Ready'];
+  const LOAD_STAGES = ['Initializing camera...', 'Loading MobileNetV2...', 'Loading models...', 'Warming up...', 'Ready'];
 
   // Effects
   $effect(() => {
@@ -93,15 +93,15 @@
 
   // Helper functions
   function getEngineLabel(mode) {
-    const labels = { fusion: 'Fusion', coco: 'COCO', ssdlens: 'Fruit', traffic_light: 'Traffic', currency: 'Money', medicine: 'Medicine', local_products: 'Products', accessibility: 'Access' };
+    const labels = { fusion: 'Fusion', coco: 'AI Vision', ssdlens: 'AI Vision', medicine: 'Medicine' };
     return labels[mode] || mode;
   }
   function getEngineIcon(mode) {
-    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', ssdlens: 'fa-apple-alt', traffic_light: 'fa-traffic-light', currency: 'fa-money-bill-wave', medicine: 'fa-pills', local_products: 'fa-shopping-basket', accessibility: 'fa-universal-access' };
+    const icons = { fusion: 'fa-compress-alt', coco: 'fa-brain', ssdlens: 'fa-brain', medicine: 'fa-pills' };
     return icons[mode] || 'fa-cube';
   }
   function getEngineColor(mode) {
-    const colors = { fusion: '#ff3366', coco: '#00e5ff', ssdlens: '#39ff14', traffic_light: '#ff0033', currency: '#ffd700', medicine: '#ff6b35', local_products: '#ffd700', accessibility: '#00e5ff' };
+    const colors = { fusion: '#ff3366', coco: '#00e5ff', ssdlens: '#00e5ff', medicine: '#ff6b35' };
     return colors[mode] || '#ffd700';
   }
 
@@ -333,7 +333,7 @@
   });
 
   function getColorFor(d) {
-    if (d.model === 'coco-ssd') return getTFColor(d.label);
+    if (d.model === 'mobilenetv2' || d.model === 'coco-ssd') return getTFColor(d.label);
     if (d.model === 'mobilenet') return getMobileNetColor(d.label);
     return getColor(d.label);
   }
@@ -937,7 +937,7 @@
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-1">
                         <span class="font-brut text-brut-xs truncate capitalize">{d.label}</span>
-                        <span class="model-pill">{d.model === 'coco-ssd' ? 'AI' : 'MNet'}</span>
+                        <span class="model-pill">{d.model === 'mobilenetv2' ? 'MN2' : d.model === 'coco-ssd' ? 'AI' : 'MNet'}</span>
                       </div>
                       <div class="flex items-center gap-1.5 mt-0.5">
                         <span class="conf-dot" style="width:{(d.score*100).toFixed(0)}%;background:{getColorFor(d)}"></span>
@@ -1059,7 +1059,7 @@
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-1.5">
                     <span class="font-brut text-brut-sm truncate capitalize">{d.label}</span>
-                    <span class="model-badge">{d.model === 'coco-ssd' ? 'AI' : 'MNet'}</span>
+                    <span class="model-badge">{d.model === 'mobilenetv2' ? 'MN2' : d.model === 'coco-ssd' ? 'AI' : 'MNet'}</span>
                   </div>
                   <div class="flex items-center gap-2 mt-0.5">
                     <span class="text-brut-xs text-neo-darkgray">{d.color.name}</span>
@@ -1225,7 +1225,7 @@
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-1">
                       <span class="font-brut text-brut-xs truncate capitalize">{d.label}</span>
-                      <span class="model-pill">{d.model === 'coco-ssd' ? 'AI' : 'MNet'}</span>
+                      <span class="model-pill">{d.model === 'mobilenetv2' ? 'MN2' : d.model === 'coco-ssd' ? 'AI' : 'MNet'}</span>
                     </div>
                     <div class="flex items-center gap-1.5 mt-0.5">
                       <span class="conf-dot" style="width:{(d.score*100).toFixed(0)}%;background:{getColorFor(d)}"></span>

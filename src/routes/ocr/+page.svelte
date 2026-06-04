@@ -106,23 +106,25 @@
     if (!imageSrc || loading) return;
     loading = true; errorMsg = ''; ocrProgress = 0;
     try {
-      const worker = await getWorker();
-      if (ocrWorker && typeof ocrWorker.setLanguage === 'function') {
-        try { await ocrWorker.setLanguage(selectedLang); } catch (_) {
-          try { await ocrWorker.terminate(); } catch (_2) {}
-          ocrWorker = null;
-          const Tesseract = await import('tesseract.js');
-          const newWorker = await Tesseract.createWorker(selectedLang, 1, {
-            logger: m => {
-              if (m.status === 'recognizing text') ocrProgress = Math.round((m.progress || 0) * 100);
-              else if (m.status === 'loading tesseract core') ocrProgress = 5;
-              else if (m.status === 'initializing tesseract') ocrProgress = 10;
-              else if (m.status === 'loading language traineddata') ocrProgress = 20;
-              else if (m.status === 'initializing api') ocrProgress = 30;
-            }
-          });
-          ocrWorker = newWorker;
+      let worker = await getWorker();
+      if (worker && typeof worker.setLanguage === 'function') {
+        try { await worker.setLanguage(selectedLang); } catch (_) {
+          try { await worker.terminate(); } catch (_2) {}
+          ocrWorker = null; worker = null;
         }
+      }
+      if (!worker) {
+        const Tesseract = await import('tesseract.js');
+        worker = await Tesseract.createWorker(selectedLang, 1, {
+          logger: m => {
+            if (m.status === 'recognizing text') ocrProgress = Math.round((m.progress || 0) * 100);
+            else if (m.status === 'loading tesseract core') ocrProgress = 5;
+            else if (m.status === 'initializing tesseract') ocrProgress = 10;
+            else if (m.status === 'loading language traineddata') ocrProgress = 20;
+            else if (m.status === 'initializing api') ocrProgress = 30;
+          }
+        });
+        ocrWorker = worker;
       }
       const { data } = await worker.recognize(imageSrc);
       extractedText = data.text;
