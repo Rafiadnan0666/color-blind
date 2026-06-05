@@ -1,12 +1,32 @@
 <script>
   import { user } from '$lib/stores/auth';
   import { goto } from '$app/navigation';
+  import { userSettings, userProfile, feedback, objectAnalytics } from '$lib/supabase/db';
+  import { onMount } from 'svelte';
 
   let initials = $state('');
+  let profile = $state(null);
+  let stats = $state([]);
+  let avatarError = $state(false);
+
+  async function loadData() {
+    try {
+      profile = await userProfile.get();
+      avatarError = false;
+      stats = await objectAnalytics.getStats();
+    } catch (_) {}
+  }
+
+  onMount(() => {
+    if ($user?.email) {
+      loadData();
+    }
+  });
 
   $effect(() => {
     if ($user?.email) {
       initials = $user.email[0].toUpperCase();
+      if (!profile) loadData();
     }
   });
 
@@ -16,22 +36,78 @@
     if (hour < 18) return 'Good Afternoon';
     return 'Good Evening';
   }
+
+  function getColorBlindModeLabel(mode) {
+    const labels = {
+      'none': 'Standard Vision',
+      'protanopia': 'Protanopia (Red-Blind)',
+      'deuteranopia': 'Deuteranopia (Green-Blind)',
+      'tritanopia': 'Tritanopia (Blue-Blind)',
+      'achromatopsia': 'Achromatopsia (Total)',
+    };
+    return labels[mode] || mode;
+  }
+
 </script>
 
 <div class="min-h-[calc(100vh-8rem)] bg-neo-white">
   <div class="max-w-7xl mx-auto px-4 py-12">
-    <div class="brut-card mb-8 bg-gradient-to-r from-blue-100 to-purple-100 border-3 border-neo-black">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="brut-heading text-brut-4xl mb-2">{getGreeting()}, {$user?.email || 'User'}!</h1>
-          <p class="font-brut text-brut-sm text-neo-darkgray uppercase tracking-wider">
-            Welcome back to your color blindness detection dashboard
-          </p>
+    
+    <div class="brut-card mb-8 border-4 border-neo-black bg-gradient-to-r from-blue-50 to-purple-50">
+      <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div class="flex items-center gap-6">
+          
+          {#if profile?.avatarurl && !avatarError}
+            <img src={profile.avatarurl} alt="" class="dash-avatar" onerror={() => avatarError = true} />
+          {:else}
+            <div class="brut-avatar w-24 h-24 text-brut-2xl flex items-center justify-center bg-gradient-to-br from-yellow-300 to-yellow-400 border-4 border-neo-black shadow-brut-lg">
+              {initials}
+            </div>
+          {/if}
+          
+          
+          <div>
+            <h1 class="brut-heading text-brut-3xl mb-1 capitalize">{profile?.name || $user?.email?.split('@')[0] || 'User'}</h1>
+            <p class="font-brut text-brut-sm text-neo-darkgray mb-3">{$user?.email || 'No email'}</p>
+            
+            
+            {#if profile?.colorblindmode}
+              <div class="inline-block">
+                <span class="font-brut text-brut-xs uppercase bg-blue-200 text-blue-900 px-3 py-1 border-2 border-neo-black">
+                  <i class="fas fa-eye mr-1"></i> {getColorBlindModeLabel(profile.colorblindmode)}
+                </span>
+              </div>
+            {/if}
+          </div>
         </div>
-        <div class="brut-avatar w-20 h-20 text-brut-lg flex items-center justify-center bg-yellow-300 border-3 border-neo-black">
-          {initials}
+
+        
+        <div class="w-full md:w-auto flex flex-col gap-3">
+          <div class="grid grid-cols-2 gap-2">
+            <div class="brut-card bg-white border-2 border-neo-black text-center p-3">
+              <div class="font-brut text-brut-2xl font-bold">{stats.length || 0}</div>
+              <div class="font-brut text-brut-xs text-neo-darkgray uppercase">Detections</div>
+            </div>
+            <div class="brut-card bg-white border-2 border-neo-black text-center p-3">
+              <div class="font-brut text-brut-2xl font-bold">{profile?.voiceenabled ? '✓' : '✗'}</div>
+              <div class="font-brut text-brut-xs text-neo-darkgray uppercase">Voice</div>
+            </div>
+          </div>
+          <a href="/profile" class="brut-btn-primary text-center w-full">
+            <i class="fas fa-cog mr-2"></i> Profile Settings
+          </a>
         </div>
       </div>
+    </div>
+
+    
+    <div class="brut-card mb-8 bg-gradient-to-r from-green-100 to-teal-100 border-3 border-neo-black">
+      <h2 class="brut-heading text-brut-3xl">
+        <i class="fas fa-hand-wave text-green-600 mr-2"></i> {getGreeting()}, {profile?.name || 'User'}!
+      </h2>
+      <p class="font-brut text-brut-sm text-neo-darkgray uppercase tracking-wider mt-2">
+        Welcome back to your color blindness detection dashboard
+      </p>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">

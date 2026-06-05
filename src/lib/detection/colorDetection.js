@@ -1,9 +1,128 @@
-/**
- * @param {number} r 0-255
- * @param {number} g 0-255
- * @param {number} b 0-255
- * @returns {{ h: number, s: number, v: number }}
- */
+const NAMED_COLORS = [
+  ['black', 0, 0, 0],
+  ['dark gray', 64, 64, 64],
+  ['gray', 128, 128, 128],
+  ['silver', 192, 192, 192],
+  ['light gray', 211, 211, 211],
+  ['gainsboro', 220, 220, 220],
+  ['white smoke', 245, 245, 245],
+  ['white', 255, 255, 255],
+  ['maroon', 128, 0, 0],
+  ['dark red', 139, 0, 0],
+  ['brown', 165, 42, 42],
+  ['firebrick', 178, 34, 34],
+  ['crimson', 220, 20, 60],
+  ['red', 255, 0, 0],
+  ['tomato', 255, 99, 71],
+  ['coral', 255, 127, 80],
+  ['indian red', 205, 92, 92],
+  ['light coral', 240, 128, 128],
+  ['salmon', 250, 128, 114],
+  ['dark salmon', 233, 150, 122],
+  ['light salmon', 255, 160, 122],
+  ['orange red', 255, 69, 0],
+  ['dark orange', 255, 140, 0],
+  ['orange', 255, 165, 0],
+  ['goldenrod', 218, 165, 32],
+  ['dark goldenrod', 184, 134, 11],
+  ['gold', 255, 215, 0],
+  ['amber', 255, 191, 0],
+  ['yellow', 255, 255, 0],
+  ['light yellow', 255, 255, 224],
+  ['pale goldenrod', 238, 232, 170],
+  ['khaki', 240, 230, 140],
+  ['dark khaki', 189, 183, 107],
+  ['yellow green', 154, 205, 50],
+  ['olive', 128, 128, 0],
+  ['olive drab', 107, 142, 35],
+  ['lawn green', 124, 252, 0],
+  ['chartreuse', 127, 255, 0],
+  ['lime', 0, 255, 0],
+  ['lime green', 50, 205, 50],
+  ['green', 0, 128, 0],
+  ['dark green', 0, 100, 0],
+  ['forest green', 34, 139, 34],
+  ['sea green', 46, 139, 87],
+  ['medium sea green', 60, 179, 113],
+  ['light green', 144, 238, 144],
+  ['pale green', 152, 251, 152],
+  ['spring green', 0, 255, 127],
+  ['medium spring green', 0, 250, 154],
+  ['teal', 0, 128, 128],
+  ['dark cyan', 0, 139, 139],
+  ['light sea green', 32, 178, 170],
+  ['medium turquoise', 72, 209, 204],
+  ['turquoise', 64, 224, 208],
+  ['cyan', 0, 255, 255],
+  ['aqua', 0, 255, 255],
+  ['aquamarine', 127, 255, 212],
+  ['pale turquoise', 175, 238, 238],
+  ['light cyan', 224, 255, 255],
+  ['navy', 0, 0, 128],
+  ['dark blue', 0, 0, 139],
+  ['medium blue', 0, 0, 205],
+  ['blue', 0, 0, 255],
+  ['royal blue', 65, 105, 225],
+  ['steel blue', 70, 130, 180],
+  ['dodger blue', 30, 144, 255],
+  ['deep sky blue', 0, 191, 255],
+  ['sky blue', 135, 206, 235],
+  ['light sky blue', 135, 206, 250],
+  ['cornflower blue', 100, 149, 237],
+  ['slate blue', 106, 90, 205],
+  ['medium slate blue', 123, 104, 238],
+  ['dark slate blue', 72, 61, 139],
+  ['indigo', 75, 0, 130],
+  ['dark magenta', 139, 0, 139],
+  ['purple', 128, 0, 128],
+  ['medium purple', 147, 112, 219],
+  ['dark violet', 148, 0, 211],
+  ['blue violet', 138, 43, 226],
+  ['magenta', 255, 0, 255],
+  ['fuchsia', 255, 0, 255],
+  ['orchid', 218, 112, 214],
+  ['plum', 221, 160, 221],
+  ['violet', 238, 130, 238],
+  ['thistle', 216, 191, 216],
+  ['lavender', 230, 230, 250],
+  ['medium orchid', 186, 85, 211],
+  ['deep pink', 255, 20, 147],
+  ['hot pink', 255, 105, 180],
+  ['light pink', 255, 182, 193],
+  ['pink', 255, 192, 203],
+  ['pale violet red', 219, 112, 147],
+  ['medium violet red', 199, 21, 133],
+  ['rosy brown', 188, 143, 143],
+  ['saddle brown', 139, 69, 19],
+  ['sienna', 160, 82, 45],
+  ['chocolate', 210, 105, 30],
+  ['peru', 205, 133, 63],
+  ['sandy brown', 244, 164, 96],
+  ['burlywood', 222, 184, 135],
+  ['tan', 210, 180, 140],
+  ['wheat', 245, 222, 179],
+  ['navajo white', 255, 222, 173],
+  ['moccasin', 255, 228, 181],
+  ['peach puff', 255, 218, 185],
+  ['bisque', 255, 228, 196],
+  ['blanched almond', 255, 235, 205],
+  ['cornsilk', 255, 248, 220],
+  ['lemon chiffon', 255, 250, 205],
+  ['honeydew', 240, 255, 240],
+  ['mint cream', 245, 255, 250],
+  ['azure', 240, 255, 255],
+  ['alice blue', 240, 248, 255],
+  ['ghost white', 248, 248, 255],
+  ['ivory', 255, 255, 240],
+  ['floral white', 255, 250, 240],
+  ['old lace', 253, 245, 230],
+  ['linen', 250, 240, 230],
+  ['antique white', 250, 235, 215],
+  ['beige', 245, 245, 220],
+  ['slate gray', 112, 128, 144],
+  ['light slate gray', 119, 136, 153],
+  ['dim gray', 105, 105, 105],
+];
 export function rgbToHsv(r, g, b) {
   r /= 255; g /= 255; b /= 255;
   const max = Math.max(r, g, b);
@@ -12,7 +131,6 @@ export function rgbToHsv(r, g, b) {
   let h = 0;
   const s = max === 0 ? 0 : diff / max;
   const v = max;
-
   if (diff !== 0) {
     switch (max) {
       case r: h = ((g - b) / diff + (g < b ? 6 : 0)) * 60; break;
@@ -20,23 +138,14 @@ export function rgbToHsv(r, g, b) {
       case b: h = ((r - g) / diff + 4) * 60; break;
     }
   }
-
   return { h, s, v };
 }
-
-/**
- * @param {number} r 0-255
- * @param {number} g 0-255
- * @param {number} b 0-255
- * @returns {{ h: number, s: number, l: number }}
- */
 export function rgbToHsl(r, g, b) {
   r /= 255; g /= 255; b /= 255;
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   let h = 0, s = 0;
   const l = (max + min) / 2;
-
   if (max !== min) {
     const d = max - min;
     s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
@@ -46,57 +155,33 @@ export function rgbToHsl(r, g, b) {
       case b: h = ((r - g) / d + 4) * 60; break;
     }
   }
-
   return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
 }
-
-/**
- * Weighted Euclidean distance between two RGB colors.
- * Weighted for human perception.
- * @param {number} r1
- * @param {number} g1
- * @param {number} b1
- * @param {number} r2
- * @param {number} g2
- * @param {number} b2
- * @returns {number}
- */
 export function colorDistance(r1, g1, b1, r2, g2, b2) {
   const dr = r1 - r2;
   const dg = g1 - g2;
   const db = b1 - b2;
   return Math.sqrt(2 * dr * dr + 4 * dg * dg + 3 * db * db);
 }
-
-/**
- * Check if two colors are similar within a threshold.
- * @param {number} r1
- * @param {number} g1
- * @param {number} b1
- * @param {number} r2
- * @param {number} g2
- * @param {number} b2
- * @param {number} [threshold=60]
- * @returns {boolean}
- */
 export function areColorsSimilar(r1, g1, b1, r2, g2, b2, threshold = 60) {
   return colorDistance(r1, g1, b1, r2, g2, b2) < threshold;
 }
-
-/**
- * Check if a color falls in a range that might be confused by
- * people with color vision deficiencies.
- * @param {number} r 0-255
- * @param {number} g 0-255
- * @param {number} b 0-255
- * @returns {Array<{type: string, label: string}>}
- */
+function findClosestNamedColor(r, g, b) {
+  let best = NAMED_COLORS[0];
+  let bestDist = Infinity;
+  for (const c of NAMED_COLORS) {
+    const d = colorDistance(r, g, b, c[1], c[2], c[3]);
+    if (d < bestDist) {
+      bestDist = d;
+      best = c;
+    }
+  }
+  return { name: best[0], r: best[1], g: best[2], b: best[3] };
+}
 export function getColorBlindConfusion(r, g, b) {
   const { h, s, v } = rgbToHsv(r, g, b);
-  const alerts = /** @type {Array<{type: string, label: string}>} */ ([]);
-
+  const alerts =  ([]);
   if (s < 0.15 || v < 0.1) return alerts;
-
   if ((h < 25 || h > 335) && s > 0.25 && v > 0.2) {
     alerts.push({ type: 'protanopia', label: 'Red-blind: may appear dark/brown' });
   }
@@ -106,83 +191,39 @@ export function getColorBlindConfusion(r, g, b) {
   if (h > 185 && h < 270 && s > 0.25 && v > 0.2) {
     alerts.push({ type: 'tritanopia', label: 'Blue-blind: may appear greenish' });
   }
-
   return alerts;
 }
-
-/**
- * @param {number} r 0-255
- * @param {number} g 0-255
- * @param {number} b 0-255
- * @returns {string}
- */
 export function rgbToHex(r, g, b) {
   return '#' + [r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('');
 }
-
-/**
- * @param {number} r 0-255
- * @param {number} g 0-255
- * @param {number} b 0-255
- * @returns {string}
- */
 export function rgbToColorName(r, g, b) {
   const { h, s, v } = rgbToHsv(r, g, b);
-
-  if (v < 0.05) return 'black';
-  if (v < 0.12) return 'very dark';
-
-  if (s < 0.08) {
-    if (v < 0.25) return 'dark gray';
-    if (v < 0.45) return 'gray';
-    if (v < 0.7) return 'light gray';
-    if (v < 0.9) return 'very light gray';
+  if (v < 0.04) return 'black';
+  if (v < 0.08) return 'very dark';
+  if (s < 0.06) {
+    if (v < 0.2) return 'dark gray';
+    if (v < 0.4) return 'gray';
+    if (v < 0.6) return 'silver';
+    if (v < 0.8) return 'light gray';
+    if (v < 0.93) return 'very light gray';
     return 'white';
   }
-
-  if (s < 0.15 && v > 0.85) return 'white';
-
-  let baseName;
-  if (h < 10 || h >= 345) baseName = 'red';
-  else if (h < 25) baseName = 'orange red';
-  else if (h < 40) baseName = 'orange';
-  else if (h < 50) baseName = 'amber';
-  else if (h < 65) baseName = 'golden';
-  else if (h < 80) baseName = 'yellow';
-  else if (h < 95) baseName = 'yellow green';
-  else if (h < 100) baseName = 'lime';
-  else if (h < 140) baseName = 'green';
-  else if (h < 170) baseName = 'teal';
-  else if (h < 195) baseName = 'cyan';
-  else if (h < 215) baseName = 'sky blue';
-  else if (h < 245) baseName = 'blue';
-  else if (h < 270) baseName = 'indigo';
-  else if (h < 295) baseName = 'purple';
-  else if (h < 315) baseName = 'magenta';
-  else if (h < 335) baseName = 'pink';
-  else baseName = 'rose';
-
-  if (s < 0.2) {
-    if (v < 0.5) return `grayish ${baseName}`;
-    return `pale ${baseName}`;
-  }
-
-  if (v < 0.25) return `dark ${baseName}`;
-  if (v < 0.4) {
-    if (s < 0.4) return `grayish ${baseName}`;
-    return `dark ${baseName}`;
-  }
-  if (v > 0.85 && s < 0.4) return `light ${baseName}`;
-  if (v > 0.92 && s < 0.55) return `bright ${baseName}`;
-
+  const matched = findClosestNamedColor(r, g, b);
+  const dist = colorDistance(r, g, b, matched.r, matched.g, matched.b);
+  const baseName = matched.name;
+  if (dist < 12) return baseName;
+  const isNeutral = dist < 20 && (s < 0.15 || v > 0.92);
+  if (isNeutral) return baseName;
+  if (v < 0.18) return `very dark ${baseName}`;
+  if (v < 0.3) return `dark ${baseName}`;
+  if (v > 0.85 && s < 0.3) return `light ${baseName}`;
+  if (v > 0.9 && s < 0.45) return `pale ${baseName}`;
+  if (v > 0.92 && s > 0.6) return `bright ${baseName}`;
+  if (s < 0.2) return `pale ${baseName}`;
+  if (s < 0.35 && v > 0.4) return `light ${baseName}`;
+  if (s < 0.35) return `grayish ${baseName}`;
   return baseName;
 }
-
-/**
- * Convert a video/image source to a canvas element
- * @param {HTMLVideoElement | HTMLCanvasElement | HTMLImageElement} source
- * @returns {HTMLCanvasElement}
- */
 function sourceToCanvas(source) {
   const cvs = document.createElement('canvas');
   if (source instanceof HTMLVideoElement) {
@@ -202,69 +243,40 @@ function sourceToCanvas(source) {
   if (ctx) ctx.drawImage(source, 0, 0);
   return cvs;
 }
-
-/**
- * Sample the dominant (average) color from a bounding box region.
- * Uses a grid of sub-samples for better accuracy.
- * @param {HTMLVideoElement | HTMLCanvasElement | HTMLImageElement} source
- * @param {number} x
- * @param {number} y
- * @param {number} w
- * @param {number} h
- * @returns {{ r: number, g: number, b: number, name: string, hex: string, hsl: { h: number, s: number, l: number }, confusion: Array<{type: string, label: string}> }}
- */
 export function sampleRegionColor(source, x, y, w, h) {
   const cvs = sourceToCanvas(source);
   const ctx = cvs.getContext('2d');
-  if (!ctx) return { r: 0, g: 0, b: 0, name: 'unknown', hex: '#000000', hsl: { h: 0, s: 0, l: 0 }, confusion: [] };
-
+  if (!ctx) return { r: 0, g: 0, b: 0, name: 'unknown', hex: '#000000', hsl: { h: 0, s: 0, l: 0 }, confusion: [], samplePos: { x: 0, y: 0 } };
   const sx = Math.max(0, Math.floor(x));
   const sy = Math.max(0, Math.floor(y));
   const sw = Math.max(1, Math.floor(Math.min(w, cvs.width - sx)));
   const sh = Math.max(1, Math.floor(Math.min(h, cvs.height - sy)));
-
-  const imageData = ctx.getImageData(sx, sy, sw, sh);
-  const data = imageData.data;
-  const pixelCount = (data.length / 4) | 0;
-
-  const rs = new Uint8Array(pixelCount);
-  const gs = new Uint8Array(pixelCount);
-  const bs = new Uint8Array(pixelCount);
-
-  for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-    rs[j] = data[i];
-    gs[j] = data[i + 1];
-    bs[j] = data[i + 2];
+  const pixelData = ctx.getImageData(sx, sy, sw, sh).data;
+  const pixelCount = (pixelData.length / 4) | 0;
+  const pixels = [];
+  let sumR = 0, sumG = 0, sumB = 0;
+  for (let i = 0; i < pixelData.length; i += 4) {
+    const r = pixelData[i], g = pixelData[i + 1], b = pixelData[i + 2];
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    pixels.push({ r, g, b, lum });
+    sumR += r; sumG += g; sumB += b;
   }
-
-  rs.sort();
-  gs.sort();
-  bs.sort();
-
+  pixels.sort((a, b) => a.lum - b.lum);
   const mid = (pixelCount / 2) | 0;
-  const r = rs[mid];
-  const g = gs[mid];
-  const b = bs[mid];
-
+  const median = pixels[mid];
+  const meanR = sumR / pixelCount;
+  const meanG = sumG / pixelCount;
+  const meanB = sumB / pixelCount;
+  const r = Math.round((median.r + meanR) / 2);
+  const g = Math.round((median.g + meanG) / 2);
+  const b = Math.round((median.b + meanB) / 2);
   const name = rgbToColorName(r, g, b);
   const hex = rgbToHex(r, g, b);
   const hsl = rgbToHsl(r, g, b);
   const confusion = getColorBlindConfusion(r, g, b);
-
-  return { r, g, b, name, hex, hsl, confusion };
+  const samplePos = { x: sx + Math.floor(sw / 2), y: sy + Math.floor(sh / 2) };
+  return { r, g, b, name, hex, hsl, confusion, samplePos };
 }
-
-/**
- * Extract the most prominent colors from an image source.
- * Downsamples, quantizes, and clusters by frequency.
- * @param {HTMLVideoElement | HTMLCanvasElement | HTMLImageElement} source
- * @param {number} [maxColors]
- * @param {number} [bx]
- * @param {number} [by]
- * @param {number} [bw]
- * @param {number} [bh]
- * @returns {Array<{ r: number, g: number, b: number, name: string, hex: string, percentage: number, positions: Array<{x: number, y: number}> }>}
- */
 export function extractPalette(source, maxColors, bx, by, bw, bh) {
   if (maxColors === undefined) maxColors = 12;
   if (bx !== undefined) {
@@ -272,32 +284,30 @@ export function extractPalette(source, maxColors, bx, by, bw, bh) {
   }
   return extractPaletteFull(source, maxColors);
 }
-
 function extractPaletteFull(source, maxColors = 12) {
   const cvs = sourceToCanvas(source);
   const ctx = cvs.getContext('2d');
   if (!ctx) return [];
-
   const w = cvs.width;
   const h = cvs.height;
-
   const sampleSize = 80;
   const stepX = Math.max(1, Math.floor(w / sampleSize));
   const stepY = Math.max(1, Math.floor(h / sampleSize));
-
+  const cols = Math.floor(w / stepX);
+  const rows = Math.floor(h / stepY);
+  const totalSamples = cols * rows;
+  const imageData = ctx.getImageData(0, 0, w, h);
+  const data = imageData.data;
   const colorBuckets = new Map();
   const colorPositions = new Map();
-
   for (let py = 0; py < h; py += stepY) {
     for (let px = 0; px < w; px += stepX) {
-      const pixel = ctx.getImageData(px, py, 1, 1).data;
-      const r = pixel[0], g = pixel[1], b = pixel[2];
-
+      const pi = (py * w + px) * 4;
+      const r = data[pi], g = data[pi + 1], b = data[pi + 2];
       const qr = Math.round(r / 32) * 32;
       const qg = Math.round(g / 32) * 32;
       const qb = Math.round(b / 32) * 32;
       const key = `${qr},${qg},${qb}`;
-
       if (!colorBuckets.has(key)) {
         colorBuckets.set(key, { r: 0, g: 0, b: 0, count: 0 });
       }
@@ -306,19 +316,15 @@ function extractPaletteFull(source, maxColors = 12) {
       bucket.g += g;
       bucket.b += b;
       bucket.count++;
-
       if (!colorPositions.has(key)) {
         colorPositions.set(key, []);
       }
       const positions = colorPositions.get(key);
-      if (positions.length < 2) {
+      if (positions.length < 3) {
         positions.push({ x: px, y: py });
       }
     }
   }
-
-  const totalSamples = (Math.floor(h / stepY)) * (Math.floor(w / stepX));
-
   const sorted = Array.from(colorBuckets.entries())
     .map(([key, bucket]) => ({
       key,
@@ -330,24 +336,18 @@ function extractPaletteFull(source, maxColors = 12) {
     }))
     .filter(c => c.percentage > 0.5)
     .sort((a, b) => b.count - a.count);
-
   const palette = [];
   const seen = new Set();
-
   for (const color of sorted) {
     if (palette.length >= maxColors) break;
-
     const qKey = `${Math.round(color.r / 48)},${Math.round(color.g / 48)},${Math.round(color.b / 48)}`;
     if (seen.has(qKey)) continue;
     seen.add(qKey);
-
     const name = rgbToColorName(color.r, color.g, color.b);
     const hex = rgbToHex(color.r, color.g, color.b);
     const positions = colorPositions.get(color.key) || [];
-
     const hsl = rgbToHsl(color.r, color.g, color.b);
     const confusion = getColorBlindConfusion(color.r, color.g, color.b);
-
     palette.push({
       r: color.r,
       g: color.g,
@@ -360,36 +360,21 @@ function extractPaletteFull(source, maxColors = 12) {
       positions,
     });
   }
-
   palette.sort((a, b) => b.percentage - a.percentage);
   return palette;
 }
-
-/**
- * @param {HTMLVideoElement | HTMLCanvasElement | HTMLImageElement} source
- * @param {number} maxColors
- * @param {number} bx
- * @param {number} by
- * @param {number} bw
- * @param {number} bh
- * @returns {Array<{ r: number, g: number, b: number, name: string, hex: string, percentage: number, positions: Array<{x: number, y: number}> }>}
- */
 function extractPaletteFromRegion(source, maxColors, bx, by, bw, bh) {
   const cvs = sourceToCanvas(source);
   const ctx = cvs.getContext('2d');
   if (!ctx) return [];
-
   const sx = Math.max(0, Math.floor(bx));
   const sy = Math.max(0, Math.floor(by));
   const sw = Math.max(1, Math.min(Math.floor(bw), cvs.width - sx));
   const sh = Math.max(1, Math.min(Math.floor(bh), cvs.height - sy));
-
   const imageData = ctx.getImageData(sx, sy, sw, sh);
   const data = imageData.data;
-
   const stepX = Math.max(1, Math.floor(sw / 24));
   const stepY = Math.max(1, Math.floor(sh / 24));
-
   const colorBuckets = new Map();
   const colorPositions = new Map();
   for (let py = 0; py < sh; py += stepY) {
@@ -413,10 +398,8 @@ function extractPaletteFromRegion(source, maxColors, bx, by, bw, bh) {
       }
     }
   }
-
   const totalSamples = Math.ceil(sh / stepY) * Math.ceil(sw / stepX);
   if (totalSamples === 0) return [];
-
   const sorted = Array.from(colorBuckets.entries())
     .map(([key, bucket]) => ({
       key,
@@ -428,7 +411,6 @@ function extractPaletteFromRegion(source, maxColors, bx, by, bw, bh) {
     }))
     .filter(c => c.percentage > 1)
     .sort((a, b) => b.count - a.count);
-
   const palette = [];
   const seen = new Set();
   for (const color of sorted) {
@@ -441,36 +423,28 @@ function extractPaletteFromRegion(source, maxColors, bx, by, bw, bh) {
     const positions = colorPositions.get(color.key) || [];
     palette.push({ r: color.r, g: color.g, b: color.b, name, hex, percentage: color.percentage, positions });
   }
-
   palette.sort((a, b) => b.percentage - a.percentage);
   return palette;
 }
-
 export function detectContour(source, x, y, w, h) {
   const cvs = sourceToCanvas(source);
   const ctx = cvs.getContext('2d');
   if (!ctx) return [];
-
   const sx = Math.max(0, Math.floor(x));
   const sy = Math.max(0, Math.floor(y));
   const sw = Math.max(2, Math.floor(Math.min(w, cvs.width - sx)));
   const sh = Math.max(2, Math.floor(Math.min(h, cvs.height - sy)));
-
   const imageData = ctx.getImageData(sx, sy, sw, sh);
   const data = imageData.data;
-
   const gray = new Float32Array(sw * sh);
   for (let i = 0; i < sw * sh; i++) {
     const pi = i * 4;
     gray[i] = data[pi] * 0.299 + data[pi + 1] * 0.587 + data[pi + 2] * 0.114;
   }
-
   const sobelX = [-1, 0, 1, -2, 0, 2, -1, 0, 1];
   const sobelY = [-1, -2, -1, 0, 0, 0, 1, 2, 1];
-
   const magnitude = new Float32Array(sw * sh);
   let maxMag = 0;
-
   for (let y2 = 1; y2 < sh - 1; y2++) {
     for (let x2 = 1; x2 < sw - 1; x2++) {
       const idx = y2 * sw + x2;
@@ -488,12 +462,9 @@ export function detectContour(source, x, y, w, h) {
       if (mag > maxMag) maxMag = mag;
     }
   }
-
   if (maxMag === 0) return [];
-
   const threshold = maxMag * 0.18;
   const points = [];
-
   for (let y2 = 2; y2 < sh - 2; y2 += 1) {
     for (let x2 = 2; x2 < sw - 2; x2 += 1) {
       const idx = y2 * sw + x2;
@@ -508,10 +479,8 @@ export function detectContour(source, x, y, w, h) {
       }
     }
   }
-
   return simplifyContour(points, 1.5);
 }
-
 function simplifyContour(points, minDist) {
   if (points.length < 3) return points;
   const simplified = [points[0]];
@@ -524,22 +493,20 @@ function simplifyContour(points, minDist) {
   }
   return simplified;
 }
-
 export function getColorGrid(source, gridSize = 20) {
   const cvs = sourceToCanvas(source);
   const ctx = cvs.getContext('2d');
   if (!ctx) return [];
-
   const w = cvs.width;
   const h = cvs.height;
   const stepX = Math.max(1, Math.floor(w / gridSize));
   const stepY = Math.max(1, Math.floor(h / gridSize));
-
+  const pixelData = ctx.getImageData(0, 0, w, h).data;
   const grid = [];
   for (let py = 0; py < h; py += stepY) {
     for (let px = 0; px < w; px += stepX) {
-      const pixel = ctx.getImageData(px, py, 1, 1).data;
-      const r = pixel[0], g = pixel[1], b = pixel[2];
+      const pi = (py * w + px) * 4;
+      const r = pixelData[pi], g = pixelData[pi + 1], b = pixelData[pi + 2];
       grid.push({
         x: px,
         y: py,
@@ -549,4 +516,4 @@ export function getColorGrid(source, gridSize = 20) {
     }
   }
   return grid;
-}
+}

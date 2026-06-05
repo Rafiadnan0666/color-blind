@@ -7,7 +7,7 @@
 
   const tabs = [
     { id: 'scan', path: '/detects', icon: 'fa-camera', label: 'Scan' },
-    { id: 'history', path: '/history', icon: 'fa-clock-rotate', label: 'History' },
+    { id: 'history', path: '/history', icon: 'fa-history', label: 'History' },
     { id: 'favorites', path: '/favorites', icon: 'fa-heart', label: 'Favorites' },
     { id: 'notifications', path: '/notifications', icon: 'fa-bell', label: 'Alerts', badge: () => unreadCount },
     { id: 'profile', path: '/profile', icon: 'fa-user', label: 'Profile' },

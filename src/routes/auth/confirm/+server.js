@@ -2,9 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase/server.js';
 
 export const GET = async ({ url, cookies, setHeaders }) => {
-  const supabase = createSupabaseServerClient(cookies, setHeaders);
-
-  // Handle PKCE code exchange (for default email templates with {{ .ConfirmationURL }})
+  const supabase = createSupabaseServerClient(cookies, setHeaders);
   const code = url.searchParams.get('code');
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
@@ -13,9 +11,7 @@ export const GET = async ({ url, cookies, setHeaders }) => {
     }
     const next = url.searchParams.get('next') || '/';
     throw redirect(303, next);
-  }
-
-  // Handle token_hash verification (for custom email templates using {{ .TokenHash }})
+  }
   const token_hash = url.searchParams.get('token_hash');
   const type = url.searchParams.get('type') ?? 'email';
   const next = url.searchParams.get('next') ?? '/';

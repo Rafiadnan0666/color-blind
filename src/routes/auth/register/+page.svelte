@@ -16,9 +16,7 @@
     if (e) error = e;
   });
 
-  /**
-   * @param {Event} e
-   */
+  
   async function handleSignUp(e) {
     e.preventDefault();
     error = '';

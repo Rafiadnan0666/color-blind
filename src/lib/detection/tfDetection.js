@@ -16,54 +16,37 @@ const COCO_CLASSES = [
 
 let model = null;
 let loadAttempted = false;
-let modelType = 'lite_mobilenet_v2';
 
-export async function loadTFModel(type = 'lite_mobilenet_v2') {
+export async function loadTFModel() {
   if (loadAttempted && model) return model;
-  modelType = type;
   loadAttempted = true;
   try {
     await tf.ready();
     const cocoSsd = await import('@tensorflow-models/coco-ssd');
-    model = await cocoSsd.load(/** @type {any} */({ base: 'lite_mobilenet_v2', scoreThreshold: 0.3 }));
+    try {
+      model = await cocoSsd.load(({ scoreThreshold: 0.2, maxNumBoxes: 30 }));
+    } catch (e) {
+      console.warn('[TF_MODEL_WARN] CDN COCO-SSD failed, retrying with default config:', e?.message);
+      model = await cocoSsd.load(({ scoreThreshold: 0.15, maxNumBoxes: 40 }));
+    }
     return model;
   } catch (e) {
-    console.error('[MODEL_LOAD_ERROR] COCO-SSD:', e?.message || e);
-    return null;
-  }
-}
-
-export async function loadTFLocalModel(modelUrl = '/model_coco/model.json') {
-  try {
-    await tf.ready();
-    const cocoSsd = await import('@tensorflow-models/coco-ssd');
-    model = await cocoSsd.load(/** @type {any} */({ base: 'lite_mobilenet_v2', scoreThreshold: 0.3 }));
-    loadAttempted = true;
-    return model;
-  } catch (e) {
-    console.warn('Local COCO-SSD model not loaded from', modelUrl, e);
+    console.error('[TF_MODEL_ERROR]', e?.message || e);
     return null;
   }
 }
 
 export async function detectTF(source) {
-  if (!model) { console.warn('TF: model not loaded'); return []; }
+  if (!model) {
+    await loadTFModel();
+    if (!model) return [];
+  }
   try {
-    const predictions = await model.detect(source, 20);
-    if (predictions.length > 0) {
-      const topScore = Math.max(...predictions.map(p => p.score));
-    }
+    const predictions = await model.detect(source, 30);
     return predictions.map((p) => ({
-      x1: p.bbox[0],
-      y1: p.bbox[1],
-      x2: p.bbox[0] + p.bbox[2],
-      y2: p.bbox[1] + p.bbox[3],
-      width: p.bbox[2],
-      height: p.bbox[3],
-      score: p.score,
-      classId: COCO_CLASSES.indexOf(p.class),
-      label: p.class,
-      model: 'coco-ssd',
+      x1: p.bbox[0], y1: p.bbox[1], x2: p.bbox[0] + p.bbox[2], y2: p.bbox[1] + p.bbox[3],
+      width: p.bbox[2], height: p.bbox[3], score: p.score, classId: COCO_CLASSES.indexOf(p.class),
+      label: p.class, model: 'coco-ssd',
     }));
   } catch (e) {
     console.error('COCO-SSD detect error:', e);

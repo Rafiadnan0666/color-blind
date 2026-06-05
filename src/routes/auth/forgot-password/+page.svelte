@@ -6,9 +6,7 @@
   let success = $state('');
   let loading = $state(false);
 
-  /**
-   * @param {Event} e
-   */
+  
   async function handleResetRequest(e) {
     e.preventDefault();
     error = '';

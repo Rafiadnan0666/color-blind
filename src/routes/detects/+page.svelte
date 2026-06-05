@@ -10,8 +10,7 @@
   import { scanHistory, favorites, savedColors, savedObjects, objectAnalytics, userSettings } from '$lib/supabase/db';
   import { session, user } from '$lib/stores/auth';
   import { notifyScanComplete, notifyColorSaved, notifyFavoriteSaved } from '$lib/supabase/notifications';
-
-  // Reactive state
+  import { speakColor, speakObject } from '$lib/utils/voice';
   let video = $state(null);
   let overlay = $state(null);
   let status = $state('');
@@ -20,9 +19,7 @@
   let detections = $state([]);
   let focusColor = $state(null);
   let focusObj = $state(null);
-  let sceneInfo = $state(null);
-
-  // Internal state
+  let sceneInfo = $state(null);
   let prevDets = [];
   let animId = null;
   let detectTimer = null;
@@ -32,18 +29,15 @@
   let frameCount = 0;
   let modelLoadErrors = $state([]);
   let detecting = false;
+  let modeSwitchId = 0;
 
-  let mobilenetRotationIndex = 0;
   let fusionRotationIndex = 0;
-  const allModels = ['fusion', 'coco', 'ssdlens', 'traffic_light', 'currency', 'medicine', 'local_products', 'accessibility'];
-  const mobilenetModels = ['traffic_light', 'currency', 'medicine', 'local_products', 'accessibility'];
+  const allModels = ['fusion', 'coco', 'ssdlens', 'medicine'];
+  const mobilenetModels = ['medicine', 'traffic_light', 'currency', 'local_products', 'accessibility'];
+  const tfModels = ['coco', 'ssdlens'];
   const fusionModels = ['coco', ...mobilenetModels];
   let cachedFrameCanvas = null;
-  let cachedDetectFrameCanvas = null;
   let scenePalette = $state([]);
-  let uploadPalette = $state([]);
-  let highlightPaletteHex = $state(null);
-  let highlightOverlay = $state(null);
 
   let objColors = $state([]);
   let objPalettes = $state({});
@@ -57,6 +51,7 @@
   let savedToHistory = $state(false);
   let saving = $state(false);
   let savedIds = $state(new Set());
+  let savedObjIds = $state(new Set());
   let showStatusToast = $state(false);
   let statusToastMsg = $state('');
   let statusToastType = $state('success');
@@ -78,9 +73,7 @@
     });
   }
 
-  const LOAD_STAGES = ['Initializing camera...', 'Loading detection models...', 'Loading MobileNetV2 model...', 'Warming up...', 'Ready'];
-
-  // Effects
+  const LOAD_STAGES = ['Initializing camera...', 'Loading detection models...', 'Loading MobileNetV2 model...', 'Warming up...', 'Ready'];
   $effect(() => {
     if (status === 'Start') { loadProgress = 15; loadStage = LOAD_STAGES[0]; }
     else if (status === 'Load') { loadProgress = 40; loadStage = LOAD_STAGES[1]; }
@@ -89,24 +82,70 @@
       loadProgress = 100; loadStage = LOAD_STAGES[4];
       setTimeout(() => { loadProgress = 0; loadStage = ''; }, 600);
     }
-  });
-
-  // Helper functions
+  });
   function getEngineLabel(mode) {
-    const labels = { fusion: 'Fusion', coco: 'COCO', ssdlens: 'Fruit', traffic_light: 'Traffic', currency: 'Money', medicine: 'Medicine', local_products: 'Products', accessibility: 'Access' };
+    const labels = { fusion: 'Fusion', coco: 'COCO', ssdlens: 'Objects', medicine: 'Medicine', traffic_light: 'Traffic', currency: 'Currency', local_products: 'Products', accessibility: 'Access' };
     return labels[mode] || mode;
   }
   function getEngineIcon(mode) {
-    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', ssdlens: 'fa-apple-alt', traffic_light: 'fa-traffic-light', currency: 'fa-money-bill-wave', medicine: 'fa-pills', local_products: 'fa-shopping-basket', accessibility: 'fa-universal-access' };
+    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', ssdlens: 'fa-apple-alt', medicine: 'fa-pills', traffic_light: 'fa-traffic-light', currency: 'fa-money-bill-wave', local_products: 'fa-shopping-basket', accessibility: 'fa-universal-access' };
     return icons[mode] || 'fa-cube';
   }
   function getEngineColor(mode) {
-    const colors = { fusion: '#ff3366', coco: '#00e5ff', ssdlens: '#39ff14', traffic_light: '#ff0033', currency: '#ffd700', medicine: '#ff6b35', local_products: '#ffd700', accessibility: '#00e5ff' };
+    const colors = { fusion: '#ff3366', coco: '#00e5ff', ssdlens: '#39ff14', medicine: '#ff6b35', traffic_light: '#ff0033', currency: '#ffd700', local_products: '#ff8c00', accessibility: '#00e5ff' };
     return colors[mode] || '#ffd700';
   }
 
   function getMobileNetModelKey(mode) {
     return mobilenetModels.includes(mode) ? mode : null;
+  }
+
+  async function switchMode(m) {
+    if (m === engineMode) return;
+    modeSwitchId++;
+    engineMode = m;
+    savedToHistory = false;
+    detections = [];
+    objColors = [];
+    objPalettes = {};
+    objContours = {};
+    selectedObj = null;
+    showObjPalette = false;
+    focusColor = null;
+    focusObj = null;
+    prevDets = [];
+    scenePalette = [];
+    stopLoop();
+    await reloadModels();
+    if (overlay) {
+      const octx = overlay.getContext('2d');
+      if (octx) octx.clearRect(0, 0, overlay.width, overlay.height);
+    }
+    if (useCamera) {
+      status = '';
+      const detInterval = 800;
+      detectTimer = setInterval(() => runDetectionFrame(true), detInterval);
+      animId = requestAnimationFrame(drawLoop);
+    } else if (imageSrc) {
+      detectId++;
+      runDetect(detectId);
+    }
+  }
+
+  async function reloadModels() {
+    status = 'Load';
+    const modelsToLoad = [];
+    if (engineMode === 'fusion') {
+      modelsToLoad.push(loadTFModel());
+      modelsToLoad.push(loadAllMobileNetModels());
+    } else if (tfModels.includes(engineMode)) {
+      modelsToLoad.push(loadTFModel());
+    } else if (mobilenetModels.includes(engineMode)) {
+      modelsToLoad.push(loadMobileNetModel(engineMode));
+    } else {
+      modelsToLoad.push(loadTFModel());
+    }
+    await Promise.allSettled(modelsToLoad);
   }
   let showObjPalette = $state(false);
   let objPalette = $state([]);
@@ -128,9 +167,7 @@
     overlay.style.height = Math.round(h) + 'px';
     overlay.style.left = Math.round((vr.width - w) / 2) + 'px';
     overlay.style.top = Math.round((vr.height - h) / 2) + 'px';
-  }
-
-  // Lifecycle
+  }
   onMount(() => {
     srcCanvas = document.createElement('canvas');
     if (useCamera) init();
@@ -172,6 +209,12 @@
       savedToHistory = true;
       for (const d of objColors) {
         try { await objectAnalytics.increment(d.label, d.score); } catch (_) {}
+        if (!savedObjIds.has(d.label)) {
+          try {
+            await savedObjects.create({ objectName: d.label, notes: `Color: ${d.color.name} ${d.color.hex} | Mode: ${engineMode} | Conf: ${(d.score * 100).toFixed(0)}%` });
+            savedObjIds = new Set([...savedObjIds, d.label]);
+          } catch (_) {}
+        }
       }
       try { await notifyScanComplete(objColors.length, engineMode); } catch (_) {}
       toast('Scan saved to history!', 'success');
@@ -218,6 +261,21 @@
     }
   }
 
+  async function saveObject(d) {
+    const id = d.label;
+    if (savedObjIds.has(id)) return;
+    savedObjIds = new Set([...savedObjIds, id]);
+    try {
+      const notes = `Color: ${d.color.name} ${d.color.hex} | Mode: ${engineMode} | Conf: ${(d.score * 100).toFixed(0)}%`;
+      await savedObjects.create({ objectName: d.label, notes });
+      toast(`"${d.label}" object saved!`, 'success');
+    } catch (e) {
+      console.warn('Could not save object:', e);
+      savedObjIds = new Set([...savedObjIds].filter(x => x !== id));
+      toast('Could not save object', 'error');
+    }
+  }
+
   async function init() {
     try {
       status = 'Start';
@@ -241,15 +299,18 @@
       const modelsToLoad = [];
       const modelNames = [];
       const mk = getMobileNetModelKey(engineMode);
-      if (engineMode === 'coco' || engineMode === 'fusion' || engineMode === 'ssdlens') {
+      if (engineMode === 'fusion') {
         modelsToLoad.push(loadTFModel());
         modelNames.push('COCO-SSD');
-      }
-      if (mk) {
+        modelsToLoad.push(loadAllMobileNetModels());
+        modelNames.push('MobileNetV2 All');
+      } else if (tfModels.includes(engineMode)) {
+        modelsToLoad.push(loadTFModel());
+        modelNames.push('COCO-SSD');
+      } else if (mk) {
         modelsToLoad.push(loadMobileNetModel(mk));
         modelNames.push(`MobileNetV2 ${getEngineLabel(engineMode)}`);
-      }
-      if (modelsToLoad.length === 0) {
+      } else {
         modelsToLoad.push(loadTFModel());
         modelNames.push('COCO-SSD');
       }
@@ -347,12 +408,8 @@
     return colored;
   }
 
-  let extractQueue = 0;
   function extractPalettesAndContours(source, dets) {
-    extractQueue++;
-    const id = extractQueue;
     setTimeout(async () => {
-      if (extractQueue !== id) return;
       const newPalettes = {};
       const newContours = {};
       for (const d of dets) {
@@ -424,6 +481,7 @@
       if (skipFrameCounter % 3 !== 0) return;
     }
     detecting = true;
+    const swId = modeSwitchId;
     frameCount++;
     try {
       const frame = captureFrame(video);
@@ -442,7 +500,9 @@
       } else {
         results = await detectTF(frame).catch(() => []);
       }
-      results = results.filter(d => d.score >= 0.15);
+      if (swId !== modeSwitchId) { detecting = false; return; }
+
+      results = results.filter(d => d.score >= 0.3);
       results.sort((a, b) => b.score - a.score);
       const raw = results.slice(0, 15);
       const cw = overlay.width, ch = overlay.height;
@@ -453,17 +513,37 @@
         return { ...d, x1: lerp(p.x1, d.x1, 0.3), y1: lerp(p.y1, d.y1, 0.3), x2: lerp(p.x2, d.x2, 0.3), y2: lerp(p.y2, d.y2, 0.3), width: lerp(p.width, d.width, 0.3), height: lerp(p.height, d.height, 0.3) };
       });
       prevDets = raw;
+      if (swId !== modeSwitchId) { detecting = false; return; }
       detections = sm;
 
       const colored = await sampleObjColors(video, sm);
+      if (swId !== modeSwitchId) { detecting = false; return; }
       objColors = colored;
 
+      for (const d of colored) {
+        if (d.label && !savedObjIds.has(d.label)) {
+          savedObjIds = new Set([...savedObjIds, d.label]);
+          savedObjects.create({ objectName: d.label, notes: `Color: ${d.color.name} ${d.color.hex} | Conf: ${(d.score * 100).toFixed(0)}%` }).catch(() => {});
+        }
+      }
+
       const best = pickNearestCenter(sm, cw, ch);
-      if (best) { focusObj = best.label; focusColor = sampleRegionColor(video, best.x1, best.y1, best.width, best.height); }
-      else { focusObj = null; focusColor = sampleRegionColor(video, cw * 0.3, ch * 0.3, cw * 0.4, ch * 0.4); }
+      if (best) {
+        const fc = sampleRegionColor(video, best.x1, best.y1, best.width, best.height);
+        if (swId !== modeSwitchId) { detecting = false; return; }
+        if (focusObj !== best.label) speakObject(best.label, best.score);
+        focusObj = best.label;
+        focusColor = fc;
+      } else {
+        const fc = sampleRegionColor(video, cw * 0.3, ch * 0.3, cw * 0.4, ch * 0.4);
+        if (swId !== modeSwitchId) { detecting = false; return; }
+        focusObj = null;
+        focusColor = fc;
+      }
 
       if (frameCount % 3 === 0) {
         const fullPalette = extractPalette(video, 8);
+        if (swId !== modeSwitchId) { detecting = false; return; }
         scenePalette = fullPalette;
       }
     } catch (e) { console.error('detection error:', e); }
@@ -484,14 +564,12 @@
     if (detectionsDirty) {
       const cw = overlay.width, ch = overlay.height;
       if (cw > 0 && ch > 0) {
-        drawFrame(detections, focusObj ? detections.find(d => d.label === focusObj) : null, cw, ch, objColors, drawLoopCtx);
+        drawFrame(detections, focusObj ? detections.find(d => d.label === focusObj) : null, cw, ch, objColors, drawLoopCtx, focusColor);
       }
       detectionsDirty = false;
     }
     animId = requestAnimationFrame(drawLoop);
   }
-
-  function drawPaletteDots() {}
 
   function pickNearestCenter(dets, cw, ch) {
     if (!dets || !dets.length) return null;
@@ -523,7 +601,7 @@
 
   let frameTick = 0;
 
-  function drawFrame(preds, focus, cw, ch, colors = [], ctx) {
+  function drawFrame(preds, focus, cw, ch, colors = [], ctx, _focusColor = null) {
     try {
       if (!ctx) ctx = overlay.getContext('2d');
       if (!ctx) return;
@@ -542,9 +620,9 @@
         ctx.save();
 
         ctx.strokeStyle = isSel ? '#ffd700' : col;
-        ctx.lineWidth = isSel ? 3 : 2;
+        ctx.lineWidth = isSel ? 4 : 2.5;
         ctx.strokeRect(x1, y1, w, h);
-        ctx.fillStyle = col + '12';
+        ctx.fillStyle = col + '15';
         ctx.fillRect(x1, y1, w, h);
 
         if (isSel) {
@@ -569,11 +647,43 @@
         ctx.fillText(label, bx + 4, by + 16);
 
         if (objColor) {
+          const swatchX = bx + tw + 12;
+          const swatchY = by + 2;
+          const swatchSize = 18;
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = objColor.hex + '88';
+          ctx.beginPath();
+          ctx.arc(swatchX + swatchSize / 2, swatchY + swatchSize / 2, swatchSize / 2, 0, Math.PI * 2);
           ctx.fillStyle = objColor.hex;
-          ctx.fillRect(bx + tw + 8, by + 3, 14, 16);
-          ctx.strokeStyle = 'rgba(10,10,10,0.3)';
-          ctx.lineWidth = 1;
-          ctx.strokeRect(bx + tw + 8, by + 3, 14, 16);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = '#0a0a0a';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        if (objColor && objColor.samplePos) {
+          const sp = objColor.samplePos;
+          ctx.save();
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = objColor.hex + 'aa';
+          ctx.beginPath();
+          ctx.arc(sp.x, sp.y, 5, 0, Math.PI * 2);
+          ctx.fillStyle = objColor.hex;
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.strokeStyle = '#0a0a0a';
+          ctx.lineWidth = 0.8;
+          ctx.setLineDash([2, 2]);
+          ctx.beginPath();
+          ctx.moveTo(sp.x - 8, sp.y); ctx.lineTo(sp.x + 8, sp.y);
+          ctx.moveTo(sp.x, sp.y - 8); ctx.lineTo(sp.x, sp.y + 8);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.restore();
         }
 
         ctx.restore();
@@ -595,8 +705,52 @@
       ctx.lineWidth = 1;
       ctx.stroke();
       ctx.restore();
+
+      if (_focusColor && _focusColor.samplePos) {
+        const sp = _focusColor.samplePos;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(sp.x - 30, sp.y - 30, 60, 60);
+        ctx.setLineDash([]);
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = _focusColor.hex + 'aa';
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, 8, 0, Math.PI * 2);
+        ctx.fillStyle = _focusColor.hex;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.strokeStyle = '#0a0a0a';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sp.x - 14, sp.y); ctx.lineTo(sp.x + 14, sp.y);
+        ctx.moveTo(sp.x, sp.y - 14); ctx.lineTo(sp.x, sp.y + 14);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.save();
+        ctx.font = `700 11px 'Space Grotesk', system-ui, sans-serif`;
+        const ft = `Focus: ${_focusColor.name} ${_focusColor.hex}`;
+        const ftw = ctx.measureText(ft).width;
+        const ftx = Math.max(4, Math.min(sp.x - ftw / 2 - 6, cw - ftw - 10));
+        const fty = Math.max(24, sp.y - 38);
+        ctx.fillStyle = 'rgba(10,10,10,0.8)';
+        ctx.shadowBlur = 0;
+        roundRect(ctx, ftx, fty, ftw + 12, 22, 4);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.shadowBlur = 0;
+        ctx.fillText(ft, ftx + 6, fty + 15);
+        ctx.restore();
+      }
     } catch (e) { console.error('drawFrame error:', e); }
   }
+
+  let detectId = 0;
 
   function handleUpload(e) {
     const f = e.target.files?.[0];
@@ -605,47 +759,80 @@
     if (f.size > maxSize) { toast('Image too large — max 20MB', 'error'); return; }
     const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/tiff'];
     if (!validTypes.includes(f.type)) { toast('Unsupported file type. Use JPEG, PNG, or WebP.', 'error'); return; }
-    detections = []; objColors = []; selectedObj = null; showObjPalette = false; focusColor = null; focusObj = null; savedToHistory = false;
+    detections = []; objColors = []; selectedObj = null; showObjPalette = false; focusColor = null; focusObj = null; savedToHistory = false; scenePalette = [];
+    detectId++;
+    const myId = detectId;
     const r = new FileReader();
-    r.onload = async (ev) => { imageSrc = ev.target?.result; await tick(); runDetect(); };
+    r.onload = async (ev) => { if (myId !== detectId) return; imageSrc = ev.target?.result; await tick(); runDetect(myId); };
     r.readAsDataURL(f);
   }
 
-  async function runDetect() {
+  async function runDetect(myId) {
     if (!imageSrc) return;
     const img = new Image();
     img.onload = async () => {
+      if (myId !== undefined && myId !== detectId) return;
       try {
         status = 'Detect';
         const modelsToLoad = [];
-        if (engineMode === 'fusion' || engineMode === 'ssdlens' || engineMode === 'coco') modelsToLoad.push(loadTFModel());
-        if (engineMode === 'fusion') modelsToLoad.push(loadAllMobileNetModels());
-        else if (mobilenetModels.includes(engineMode)) modelsToLoad.push(loadMobileNetModel(engineMode));
+        if (engineMode === 'fusion') {
+          modelsToLoad.push(loadTFModel());
+          modelsToLoad.push(loadAllMobileNetModels());
+        } else if (tfModels.includes(engineMode)) {
+          modelsToLoad.push(loadTFModel());
+        } else if (mobilenetModels.includes(engineMode)) {
+          modelsToLoad.push(loadMobileNetModel(engineMode));
+        } else {
+          modelsToLoad.push(loadTFModel());
+        }
         await Promise.allSettled(modelsToLoad);
+        if (myId !== undefined && myId !== detectId) return;
         if (srcCanvas) { srcCanvas.width = img.naturalWidth; srcCanvas.height = img.naturalHeight; srcCanvas.getContext('2d').drawImage(img, 0, 0); }
         if (overlay) { overlay.width = img.naturalWidth; overlay.height = img.naturalHeight; }
-        if (highlightOverlay) { highlightOverlay.width = img.naturalWidth; highlightOverlay.height = img.naturalHeight; }
         const frame = captureFrame(img);
         const mk = getMobileNetModelKey(engineMode);
-        let ssdResults = [], tfResults = [], mobilenetCombined = [];
+        let allResults = [];
         if (engineMode === 'fusion') {
-          tfResults = await detectTF(frame).catch(() => []);
-          mobilenetCombined = await detectMobileNet(frame, mobilenetModels[frameCount % mobilenetModels.length]).catch(() => []);
-        } else if (engineMode === 'ssdlens' || engineMode === 'coco') {
-          tfResults = await detectTF(frame).catch(() => []);
+          const [tfR, ...mobileR] = await Promise.all([
+            detectTF(frame).catch(() => []),
+            ...mobilenetModels.map(mk2 => detectMobileNet(frame, mk2).catch(() => []))
+          ]);
+          allResults = [].concat(tfR, ...mobileR);
+        } else if (tfModels.includes(engineMode)) {
+          allResults = await detectTF(frame).catch(() => []);
         } else if (mk) {
-          mobilenetCombined = await detectMobileNet(frame, mk).catch(() => []);
+          allResults = await detectMobileNet(frame, mk).catch(() => []);
         }
-        let results = [...tfResults, ...mobilenetCombined].filter(d => d.score >= 0.15);
+        if (myId !== undefined && myId !== detectId) return;
+        let results = allResults.filter(d => d.score >= 0.3);
         results.sort((a, b) => b.score - a.score);
         detections = results;
 
         const colored = await sampleObjColors(img, results);
         objColors = colored;
 
+        if (myId !== undefined && myId !== detectId) return;
+        if (results.length > 0) {
+          const cw = overlay?.width || img.naturalWidth;
+          const ch = overlay?.height || img.naturalHeight;
+          const best = pickNearestCenter(results, cw, ch);
+          if (best) {
+            const col = colored.find(c => c.label === best.label)?.color || null;
+            if (myId !== undefined && myId !== detectId) return;
+            if (focusObj !== best.label) speakObject(best.label, best.score);
+            focusObj = best.label;
+            focusColor = col;
+          }
+        }
+        if (!focusColor) {
+          const fc = sampleRegionColor(img, 0, 0, img.naturalWidth, img.naturalHeight);
+          if (myId !== undefined && myId !== detectId) return;
+          focusObj = null;
+          focusColor = fc;
+        }
+
         classifyScene(img).then(s => { sceneInfo = s; }).catch(() => {});
-        const pal = extractPalette(img, 10);
-        uploadPalette = pal;
+        scenePalette = extractPalette(img, 10);
 
         if (overlay) {
           try {
@@ -670,8 +857,38 @@
                 ctx.shadowBlur = 6; ctx.shadowColor = col + '99';
                 ctx.strokeStyle = col; ctx.lineWidth = 2;
                 ctx.strokeRect(d.x1, d.y1, d.width, d.height);
-                ctx.shadowBlur = 0; ctx.fillStyle = col + '06';
+                ctx.shadowBlur = 0;
+              }
+
+              if (objColor) {
+                ctx.fillStyle = objColor.hex + '25';
                 ctx.fillRect(d.x1, d.y1, d.width, d.height);
+                ctx.fillStyle = objColor.hex + '40';
+                ctx.fillRect(d.x1 + d.width * 0.1, d.y1 + d.height * 0.1, d.width * 0.8, d.height * 0.8);
+
+                if (objColor.samplePos) {
+                  const sp = objColor.samplePos;
+                  ctx.save();
+                  ctx.shadowBlur = 8;
+                  ctx.shadowColor = objColor.hex + 'cc';
+                  ctx.beginPath();
+                  ctx.arc(sp.x, sp.y, 6, 0, Math.PI * 2);
+                  ctx.fillStyle = objColor.hex;
+                  ctx.fill();
+                  ctx.shadowBlur = 0;
+                  ctx.strokeStyle = '#fff';
+                  ctx.lineWidth = 2.5;
+                  ctx.stroke();
+                  ctx.strokeStyle = '#0a0a0a';
+                  ctx.lineWidth = 1;
+                  ctx.setLineDash([2, 2]);
+                  ctx.beginPath();
+                  ctx.moveTo(sp.x - 10, sp.y); ctx.lineTo(sp.x + 10, sp.y);
+                  ctx.moveTo(sp.x, sp.y - 10); ctx.lineTo(sp.x, sp.y + 10);
+                  ctx.stroke();
+                  ctx.setLineDash([]);
+                  ctx.restore();
+                }
               }
 
               const cl = Math.min(14, Math.min(d.width, d.height) * 0.2);
@@ -705,7 +922,8 @@
               ctx.font = `700 13px 'Space Grotesk', system-ui, sans-serif`;
               const label = `${d.label} ${(d.score * 100).toFixed(0)}%`;
               const tw = ctx.measureText(label).width;
-              const pillW = tw + 12 + (objColor ? 16 : 0);
+              const swatchW = objColor ? 20 : 0;
+              const pillW = tw + 16 + swatchW;
               ctx.fillStyle = col; ctx.globalAlpha = 0.9;
               ctx.shadowBlur = 3; ctx.shadowColor = 'rgba(0,0,0,0.3)';
               roundRect(ctx, d.x1, d.y1 - 22, pillW, 22, 4);
@@ -713,11 +931,60 @@
               ctx.fillStyle = '#0a0a0a';
               ctx.fillText(label, d.x1 + 5, d.y1 - 6);
               if (objColor) {
+                const cx = d.x1 + tw + 12;
+                const cy = d.y1 - 12;
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = objColor.hex + '99';
+                ctx.beginPath();
+                ctx.arc(cx + 8, cy, 8, 0, Math.PI * 2);
                 ctx.fillStyle = objColor.hex;
-                ctx.fillRect(d.x1 + tw + 14, d.y1 - 19, 14, 16);
-                ctx.strokeStyle = 'rgba(10,10,10,0.25)'; ctx.lineWidth = 1;
-                ctx.strokeRect(d.x1 + tw + 14, d.y1 - 19, 14, 16);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = '#0a0a0a';
+                ctx.lineWidth = 2;
+                ctx.stroke();
               }
+              ctx.restore();
+            }
+
+            if (focusColor && focusColor.samplePos) {
+              const sp = focusColor.samplePos;
+              ctx.save();
+              ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+              ctx.lineWidth = 2;
+              ctx.setLineDash([4, 4]);
+              ctx.strokeRect(sp.x - 30, sp.y - 30, 60, 60);
+              ctx.setLineDash([]);
+              ctx.shadowBlur = 12;
+              ctx.shadowColor = focusColor.hex + 'aa';
+              ctx.beginPath();
+              ctx.arc(sp.x, sp.y, 8, 0, Math.PI * 2);
+              ctx.fillStyle = focusColor.hex;
+              ctx.fill();
+              ctx.shadowBlur = 0;
+              ctx.strokeStyle = '#fff';
+              ctx.lineWidth = 3;
+              ctx.stroke();
+              ctx.strokeStyle = '#0a0a0a';
+              ctx.lineWidth = 1;
+              ctx.beginPath();
+              ctx.moveTo(sp.x - 14, sp.y); ctx.lineTo(sp.x + 14, sp.y);
+              ctx.moveTo(sp.x, sp.y - 14); ctx.lineTo(sp.x, sp.y + 14);
+              ctx.stroke();
+              ctx.restore();
+
+              ctx.save();
+              ctx.font = `700 11px 'Space Grotesk', system-ui, sans-serif`;
+              const ft = `Focus: ${focusColor.name} ${focusColor.hex}`;
+              const ftw = ctx.measureText(ft).width;
+              const ftx = Math.max(4, Math.min(sp.x - ftw / 2 - 6, overlay.width - ftw - 10));
+              const fty = Math.max(24, sp.y - 38);
+              ctx.fillStyle = 'rgba(10,10,10,0.8)';
+              ctx.shadowBlur = 0;
+              roundRect(ctx, ftx, fty, ftw + 12, 22, 4);
+              ctx.fill();
+              ctx.fillStyle = '#fff';
+              ctx.fillText(ft, ftx + 6, fty + 16);
               ctx.restore();
             }
           } catch (e) { console.error('upload draw error:', e); }
@@ -728,39 +995,6 @@
     img.src = imageSrc;
   }
 
-  function toggleHighlight(pc) {
-    if (highlightPaletteHex === pc.hex) {
-      highlightPaletteHex = null;
-      if (highlightOverlay) { highlightOverlay.getContext('2d')?.clearRect(0, 0, highlightOverlay.width, highlightOverlay.height); }
-      return;
-    }
-    highlightPaletteHex = pc.hex;
-    drawPaletteHighlight(pc);
-  }
-
-  function drawPaletteHighlight(pc) {
-    if (!highlightOverlay || !pc.positions || pc.positions.length === 0) return;
-    const ctx = highlightOverlay.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, highlightOverlay.width, highlightOverlay.height);
-
-    for (const pos of pc.positions) {
-      const rad = 4;
-      const grad = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, rad);
-      grad.addColorStop(0, pc.hex + 'cc');
-      grad.addColorStop(1, pc.hex + '00');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(pos.x, pos.y, rad, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = pc.hex + '44';
-      ctx.beginPath();
-      ctx.arc(pos.x, pos.y, rad * 2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-
   function selectObject(d) {
     selectedObj = selectedObj?.label === d.label ? null : d;
     const source = useCamera ? video : srcCanvas;
@@ -769,6 +1003,7 @@
   }
 
   async function toggleCam() {
+    modeSwitchId++;
     useCamera = !useCamera;
     imageSrc = null; detections = []; objColors = []; focusColor = null; focusObj = null;
     selectedObj = null; showObjPalette = false; savedToHistory = false;
@@ -782,9 +1017,16 @@
     if (useCamera) { await tick(); init(); }
     else {
       const toLoad = [];
-      if (engineMode === 'fusion' || engineMode === 'ssdlens' || engineMode === 'coco') toLoad.push(loadTFModel());
-      if (engineMode === 'fusion') toLoad.push(loadAllMobileNetModels());
-      else if (mobilenetModels.includes(engineMode)) toLoad.push(loadMobileNetModel(engineMode));
+      if (engineMode === 'fusion') {
+        toLoad.push(loadTFModel());
+        toLoad.push(loadAllMobileNetModels());
+      } else if (tfModels.includes(engineMode)) {
+        toLoad.push(loadTFModel());
+      } else if (mobilenetModels.includes(engineMode)) {
+        toLoad.push(loadMobileNetModel(engineMode));
+      } else {
+        toLoad.push(loadTFModel());
+      }
       await Promise.allSettled(toLoad);
     }
   }
@@ -797,9 +1039,11 @@
       if (f.size > maxSize) { toast('Image too large — max 20MB', 'error'); return; }
       const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/tiff'];
       if (!validTypes.includes(f.type)) { toast('Unsupported file type', 'error'); return; }
-      detections = []; objColors = []; selectedObj = null; showObjPalette = false; focusColor = null; focusObj = null; savedToHistory = false;
+      detections = []; objColors = []; selectedObj = null; showObjPalette = false; focusColor = null; focusObj = null; savedToHistory = false; scenePalette = [];
+      detectId++;
+      const myId = detectId;
       const r = new FileReader();
-      r.onload = async (ev) => { imageSrc = ev.target?.result; await tick(); runDetect(); };
+      r.onload = async (ev) => { if (myId !== detectId) return; imageSrc = ev.target?.result; await tick(); runDetect(myId); };
       r.readAsDataURL(f);
     }
   }
@@ -824,7 +1068,7 @@
 
   {#if useCamera}
     <div class="cam-ui">
-      <!-- Desktop top bar -->
+      
       <div class="cam-controls-desktop">
         <div class="desk-toolbar-row">
           <a href="/dashboard" class="tool-btn" aria-label="Back to dashboard">
@@ -847,10 +1091,10 @@
         </div>
       </div>
 
-      <ModeSheet show={showModeSheet} current={engineMode} onSelect={(m) => { engineMode = m; savedToHistory = false; }} onClose={() => showModeSheet = false} />
+      <ModeSheet show={showModeSheet} current={engineMode} onSelect={(m) => { switchMode(m); }} onClose={() => showModeSheet = false} />
 
       <div class="cam-main">
-        <!-- Mobile top bar -->
+        
         <div class="cam-toolbar-mobile">
           <a href="/dashboard" class="cam-btn" aria-label="Back">
             <i class="fas fa-chevron-left"></i>
@@ -879,7 +1123,7 @@
 
       </div>
 
-      <!-- Desktop info panel - outside camera panel -->
+      
     
 
       <div class="cam-overlays">
@@ -890,34 +1134,41 @@
             </div>
           {/if}
           {#if focusColor}
-            <div class="cam-color-card" style="border-color: {focusColor.hex}" transition:fly={{ y: 8, duration: 200 }}>
-              <div class="flex items-center gap-2 w-full">
-                <div class="swatch" style="background: {focusColor.hex}"></div>
-                <div class="flex-1 min-w-0">
-                  <div class="font-brut text-brut-sm capitalize">{focusColor.name}</div>
-                  <div class="text-brut-xs text-neo-darkgray">{focusColor.hex} {#if focusColor.r !== undefined}({focusColor.r},{focusColor.g},{focusColor.b}){/if}</div>
-                  {#if focusObj}<div class="text-brut-xs text-neo-darkgray capitalize">{focusObj}</div>{/if}
-                </div>
-                <div class="flex items-center gap-1">
-                  {#if focusColor.confusion?.length}
-                    <span class="cam-icon-btn text-red-500" title={focusColor.confusion[0].label}><i class="fas fa-eye"></i></span>
-                  {/if}
-                  <button class="cam-icon-btn" onclick={() => saveColor(focusColor)} aria-label="Save color"><i class="fas fa-floppy-disk"></i></button>
-                  <button class="cam-icon-btn" onclick={() => showSimulation = !showSimulation} aria-label="Toggle CVD sim"><i class="fas {showSimulation ? 'fa-eye-slash' : 'fa-low-vision'}"></i></button>
-                </div>
+            <div class="cam-color-section" transition:fly={{ y: 8, duration: 200 }}>
+              <div class="cam-color-tag">
+                <i class="fas fa-palette mr-1"></i> Color Indicator
               </div>
-              {#if showSimulation && focusColor.simulated}
-                <div class="sim-row">
-                  {#each focusColor.simulated as sim}
-                    <div class="sim-chip" title={sim.label}>
-                      <div class="sim-swatch" style="background: {sim.hex}"></div>
-                      <span class="sim-label">{sim.label.slice(0,5)}</span>
-                    </div>
-                  {/each}
+              <div class="cam-color-card" style="border-color: {focusColor.hex}">
+                <div class="flex items-center gap-2 w-full">
+                  <div class="swatch-lg" style="background: {focusColor.hex}; box-shadow: 0 0 12px {focusColor.hex}66"></div>
+                  <div class="flex-1 min-w-0">
+                    <div class="font-brut text-brut-sm capitalize">{focusColor.name}</div>
+                    <div class="text-brut-xs text-neo-darkgray">{focusColor.hex} {#if focusColor.r !== undefined}({focusColor.r},{focusColor.g},{focusColor.b}){/if}</div>
+                    {#if focusObj}<div class="text-brut-xs text-neo-darkgray capitalize">{focusObj}</div>{/if}
+                  </div>
+                  <div class="flex items-center gap-1">
+                    {#if focusColor.confusion?.length}
+                      <span class="cam-icon-btn text-red-500" title={focusColor.confusion[0].label}><i class="fas fa-eye"></i></span>
+                    {/if}
+                    <button class="cam-icon-btn" onclick={() => saveColor(focusColor)} aria-label="Save color"><i class="fas fa-floppy-disk"></i></button>
+                    <button class="cam-icon-btn" onclick={() => showSimulation = !showSimulation} aria-label="Toggle CVD sim"><i class="fas {showSimulation ? 'fa-eye-slash' : 'fa-low-vision'}"></i></button>
+                  </div>
                 </div>
-              {/if}
+                {#if showSimulation && focusColor.simulated}
+                  <div class="sim-row">
+                    {#each focusColor.simulated as sim}
+                      <div class="sim-chip" title={sim.label}>
+                        <div class="sim-swatch" style="background: {sim.hex}"></div>
+                        <span class="sim-label">{sim.label.slice(0,5)}</span>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
             </div>
           {/if}
+
+          <div class="cam-section-divider"></div>
 
           {#if objColors.length > 0}
             <div class="cam-detections">
@@ -932,8 +1183,10 @@
               </div>
               <div class="cam-dets-list">
                 {#each objColors as d, i (d.label + d.score + i)}
-                  <div role="button" tabindex="0" class="cam-det-item" class:selected={selectedObj?.label === d.label} onclick={() => selectObject(d)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectObject(d); }}>
-                    <span class="color-swatch-mini" style="background: {d.color.hex}"></span>
+                  <div role="button" tabindex="0" class="cam-det-item" class:selected={selectedObj?.label === d.label} style="border-left-color: {d.color.hex}" onclick={() => selectObject(d)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectObject(d); }}>
+                    <div class="cam-det-color" style="background: {d.color.hex}; --swatch-glow: {d.color.hex}66">
+                      <span class="cam-det-hex">{d.color.hex}</span>
+                    </div>
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-1">
                         <span class="font-brut text-brut-xs truncate capitalize">{d.label}</span>
@@ -942,22 +1195,8 @@
                       <div class="flex items-center gap-1.5 mt-0.5">
                         <span class="conf-dot" style="width:{(d.score*100).toFixed(0)}%;background:{getColorFor(d)}"></span>
                         <span class="text-brut-xs text-neo-darkgray">{(d.score*100).toFixed(0)}%</span>
-                        <span class="text-brut-xs text-neo-darkgray capitalize">{d.color.name}</span>
-                        <span class="text-brut-xs text-neo-darkgray">{d.color.hex}</span>
+                        <span class="text-brut-xs font-bold capitalize">{d.color.name}</span>
                       </div>
-                      {#if d.color.r !== undefined}
-                        <div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
-                          <span class="text-brut-2xs text-neo-darkgray font-mono">RGB({d.color.r},{d.color.g},{d.color.b})</span>
-                          <span class="text-brut-2xs text-neo-darkgray font-mono">HSL({d.color.hsl.h}°{d.color.hsl.s}%{d.color.hsl.l}%)</span>
-                        </div>
-                      {/if}
-                      {#if d.color.confusion?.length}
-                        <div class="flex gap-1 mt-0.5 flex-wrap">
-                          {#each d.color.confusion as cvd}
-                            <span class="cvd-chip" title={cvd.label}>{cvd.type.slice(0,5)}</span>
-                          {/each}
-                        </div>
-                      {/if}
                       {#if objPalettes[d.label] && objPalettes[d.label].length > 0}
                         <div class="flex gap-0.5 mt-0.5">
                           {#each objPalettes[d.label].slice(0, 4) as pc}
@@ -968,6 +1207,9 @@
                     </div>
                     <button class="cam-fav-btn" class:saved={savedIds.has(`${d.label}-${d.color.hex}`)} onclick={(e) => { e.stopPropagation(); saveAsFavorite(d); }} aria-label="Favorite">
                       <i class="fas fa-heart"></i>
+                    </button>
+                    <button class="cam-fav-btn" class:saved={savedObjIds.has(d.label)} onclick={(e) => { e.stopPropagation(); saveObject(d); }} aria-label="Save object">
+                      <i class="fas fa-cube"></i>
                     </button>
                   </div>
                 {/each}
@@ -1008,14 +1250,13 @@
         </div>
       </div>
 
-      <ModeSheet show={showModeSheet} current={engineMode} onSelect={(m) => { engineMode = m; savedToHistory = false; }} onClose={() => showModeSheet = false} />
+      <ModeSheet show={showModeSheet} current={engineMode} onSelect={(m) => { switchMode(m); }} onClose={() => showModeSheet = false} />
 
       <div class="view" class:show={!status}>
         {#if imageSrc}
           <div class="viewfinder">
             <img src={imageSrc} alt="" class="img">
             <canvas bind:this={overlay}></canvas>
-            <canvas bind:this={highlightOverlay} class="highlight-canvas"></canvas>
           </div>
           {#each modelLoadErrors as err}
             <div class="model-err-banner">{err}</div>
@@ -1034,6 +1275,44 @@
           </div>
         {/if}
       </div>
+
+      {#if focusColor && imageSrc}
+        <div class="upload-color-section" transition:fly={{ y: 8, duration: 200 }}>
+          <div class="color-indicator-tag">
+            <i class="fas fa-palette mr-1"></i> Color Indicator
+          </div>
+          <div class="upload-color-card" style="border-color: {focusColor.hex}">
+            <div class="flex items-center gap-3 w-full">
+              <div class="swatch-xl" style="background: {focusColor.hex}; box-shadow: 0 0 16px {focusColor.hex}88"></div>
+              <div class="flex-1 min-w-0">
+                <div class="font-brut text-brut capitalize">{focusColor.name}</div>
+                <div class="text-brut-xs text-neo-darkgray font-mono">{focusColor.hex}</div>
+                {#if focusColor.r !== undefined}
+                  <div class="text-brut-2xs text-neo-darkgray font-mono">RGB({focusColor.r},{focusColor.g},{focusColor.b})</div>
+                {/if}
+                {#if focusObj}<div class="text-brut-xs text-neo-darkgray capitalize mt-0.5">{focusObj}</div>{/if}
+              </div>
+              <div class="flex items-center gap-1.5">
+                {#if focusColor.confusion?.length}
+                  <span class="upload-icon-btn text-red-500" title={focusColor.confusion[0].label}><i class="fas fa-eye"></i></span>
+                {/if}
+                <button class="upload-icon-btn" onclick={() => saveColor(focusColor)} aria-label="Save color"><i class="fas fa-floppy-disk"></i></button>
+                <button class="upload-icon-btn" onclick={() => showSimulation = !showSimulation} aria-label="Toggle CVD sim"><i class="fas {showSimulation ? 'fa-eye-slash' : 'fa-low-vision'}"></i></button>
+              </div>
+            </div>
+            {#if showSimulation && focusColor.simulated}
+              <div class="sim-row">
+                {#each focusColor.simulated as sim}
+                  <div class="sim-chip" title={sim.label}>
+                    <div class="sim-swatch" style="background: {sim.hex}"></div>
+                    <span class="sim-label">{sim.label.slice(0,5)}</span>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        </div>
+      {/if}
 
       {#if objColors.length > 0}
         <div class="summary-bar brut-card" transition:fly={{ y: 8, duration: 200 }}>
@@ -1054,30 +1333,19 @@
           </div>
           <div class="detections-list">
             {#each objColors as d, i (d.label + d.score + i)}
-              <div role="button" tabindex="0" class="detection-item" class:selected={selectedObj?.label === d.label} onclick={() => selectObject(d)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectObject(d); }}>
-                <span class="color-swatch-mini" style="background:{d.color.hex}"></span>
+              <div role="button" tabindex="0" class="detection-item" class:selected={selectedObj?.label === d.label} style="border-left-color: {d.color.hex}" onclick={() => selectObject(d)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectObject(d); }}>
+                <div class="det-color-box" style="background:{d.color.hex}; --swatch-glow: {d.color.hex}66">
+                  <span class="det-color-hex">{d.color.hex}</span>
+                </div>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-1.5">
                     <span class="font-brut text-brut-sm truncate capitalize">{d.label}</span>
                     <span class="model-badge">{d.model === 'coco-ssd' ? 'AI' : 'MNet'}</span>
                   </div>
                   <div class="flex items-center gap-2 mt-0.5">
-                    <span class="text-brut-xs text-neo-darkgray">{d.color.name}</span>
-                    <span class="text-brut-xs text-neo-darkgray">{d.color.hex}</span>
+                    <span class="font-brut text-brut-xs capitalize">{d.color.name}</span>
+                    <span class="text-brut-xs font-mono">{d.color.hex}</span>
                   </div>
-                  {#if d.color.r !== undefined}
-                    <div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
-                      <span class="text-brut-2xs text-neo-darkgray font-mono">RGB({d.color.r},{d.color.g},{d.color.b})</span>
-                      <span class="text-brut-2xs text-neo-darkgray font-mono">HSL({d.color.hsl.h}°{d.color.hsl.s}%{d.color.hsl.l}%)</span>
-                    </div>
-                  {/if}
-                  {#if d.color.confusion?.length}
-                    <div class="flex gap-1 mt-0.5 flex-wrap">
-                      {#each d.color.confusion as cvd}
-                        <span class="cvd-chip" title={cvd.label}>{cvd.type.slice(0,5)}</span>
-                      {/each}
-                    </div>
-                  {/if}
                   {#if objPalettes[d.label] && objPalettes[d.label].length > 0}
                     <div class="flex gap-1 mt-0.5 flex-wrap">
                       {#each objPalettes[d.label].slice(0, 5) as pc}
@@ -1098,6 +1366,9 @@
                 </div>
                 <button class="fav-btn" class:saved={savedIds.has(`${d.label}-${d.color.hex}`)} onclick={(e) => { e.stopPropagation(); saveAsFavorite(d); }} aria-label="Favorite">
                   <i class="fas fa-heart"></i>
+                </button>
+                <button class="fav-btn" class:saved={savedObjIds.has(d.label)} onclick={(e) => { e.stopPropagation(); saveObject(d); }} aria-label="Save object">
+                  <i class="fas fa-cube"></i>
                 </button>
               </div>
             {/each}
@@ -1126,22 +1397,21 @@
         </div>
       {/if}
 
-      {#if uploadPalette.length > 0}
+      {#if scenePalette.length > 0}
         <div class="scene-palette-panel brut-card">
           <div class="panel-head">
             <span class="font-brut text-brut-xs uppercase"><i class="fas fa-palette mr-2 text-neo-green"></i>Scene Colors</span>
-            <span class="text-brut-xs text-neo-darkgray">{uploadPalette.length} colors</span>
+            <span class="text-brut-xs text-neo-darkgray">{scenePalette.length} colors</span>
           </div>
           <div class="scene-palette-grid">
-            {#each uploadPalette as pc}
-              <button class="scene-chip" class:active={highlightPaletteHex === pc.hex} onclick={() => toggleHighlight(pc)} aria-label="Highlight {pc.name}">
+            {#each scenePalette as pc}
+              <div class="scene-chip">
                 <div class="scene-swatch" style="background:{pc.hex}"></div>
                 <div class="scene-chip-info">
                   <span class="font-brut text-brut-xs capitalize truncate">{pc.name}</span>
                   <span class="text-brut-xs text-neo-darkgray">{pc.hex} {pc.percentage.toFixed(0)}%</span>
                 </div>
-                <i class="fas fa-crosshairs text-brut-xs {highlightPaletteHex === pc.hex ? 'text-neo-green' : 'text-neo-darkgray'}"></i>
-              </button>
+              </div>
             {/each}
           </div>
         </div>
@@ -1172,9 +1442,13 @@
         {/if}
         <div class="cam-color-bar-desktop">
           {#if focusColor}
-            <div class="desk-color-card" style="border-color: {focusColor.hex}">
+            <div class="desk-color-section">
+              <div class="desk-color-tag">
+                <i class="fas fa-palette mr-1"></i> Color Indicator
+              </div>
+              <div class="desk-color-card" style="border-color: {focusColor.hex}">
               <div class="desk-color-header">
-                <div class="swatch" style="background: {focusColor.hex}"></div>
+                <div class="swatch-lg" style="background: {focusColor.hex}; box-shadow: 0 0 12px {focusColor.hex}66"></div>
                 <div class="flex-1 min-w-0">
                   <div class="font-brut text-brut-sm capitalize">{focusColor.name}</div>
                   <div class="text-brut-xs text-neo-darkgray">{focusColor.hex} {#if focusColor.r !== undefined}({focusColor.r},{focusColor.g},{focusColor.b}){/if}</div>
@@ -1199,6 +1473,7 @@
                 </div>
               {/if}
             </div>
+            </div>
           {/if}
           {#if scenePalette.length > 0}
             <div class="desk-palette-bar">
@@ -1220,8 +1495,8 @@
             </div>
             <div class="desk-dets-list">
               {#each objColors as d, i (d.label + d.score + i)}
-                <div role="button" tabindex="0" class="desk-det-item" class:selected={selectedObj?.label === d.label} onclick={() => selectObject(d)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectObject(d); }}>
-                  <span class="color-swatch-mini" style="background: {d.color.hex}"></span>
+                <div role="button" tabindex="0" class="desk-det-item" class:selected={selectedObj?.label === d.label} style="border-left-color: {d.color.hex}" onclick={() => selectObject(d)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectObject(d); }}>
+                  <span class="color-swatch-mini" style="background: {d.color.hex}; box-shadow: 0 0 8px {d.color.hex}66"></span>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-1">
                       <span class="font-brut text-brut-xs truncate capitalize">{d.label}</span>
@@ -1256,6 +1531,9 @@
                   </div>
                   <button class="cam-fav-btn" class:saved={savedIds.has(`${d.label}-${d.color.hex}`)} onclick={(e) => { e.stopPropagation(); saveAsFavorite(d); }} aria-label="Favorite">
                     <i class="fas fa-heart"></i>
+                  </button>
+                  <button class="cam-fav-btn" class:saved={savedObjIds.has(d.label)} onclick={(e) => { e.stopPropagation(); saveObject(d); }} aria-label="Save object">
+                    <i class="fas fa-cube"></i>
                   </button>
                 </div>
               {/each}
@@ -1339,15 +1617,50 @@
     .desk-detections { border: 3px solid #0a0a0a; background: #fefefe; box-shadow: 4px 4px 0 #0a0a0a; }
     .desk-dets-header { display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.5rem; border-bottom: 2px solid #0a0a0a; }
     .desk-dets-list { max-height: 200px; overflow-y: auto; }
-    .desk-det-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.5rem; cursor: pointer; transition: background 0.1s; border-bottom: 1px solid rgba(10,10,10,0.08); }
+    .desk-det-item { display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.5rem; cursor: pointer; transition: background 0.1s; border-bottom: 1px solid rgba(10,10,10,0.08); border-left: 3px solid transparent; }
     .desk-det-item:hover { background: #39ff1422; }
     .desk-det-item.selected { background: #39ff1433; }
     .desk-det-item:last-child { border-bottom: none; }
+  }
+  .cam-color-section { display: flex; flex-direction: column; gap: 0.2rem; }
+  .cam-color-tag {
+    display: inline-flex; align-items: center; align-self: flex-start;
+    padding: 0.15rem 0.5rem; font: 700 0.55rem/1 'Space Grotesk', system-ui, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    background: #0a0a0a; color: #fefefe; border: 2px solid #0a0a0a;
+    box-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+  }
+  .cam-section-divider { height: 2px; background: rgba(255,255,255,0.15); margin: 0; }
+  .swatch-lg { width: 44px; height: 44px; border: 2px solid #0a0a0a; flex-shrink: 0; border-radius: 4px; }
+  .desk-color-section { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; }
+  .desk-color-tag {
+    display: inline-flex; align-items: center; align-self: flex-start;
+    padding: 0.1rem 0.5rem; font: 700 0.5rem/1 'Space Grotesk', system-ui, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    background: #0a0a0a; color: #fefefe; border: 2px solid #0a0a0a;
   }
   .cam-color-card {
     padding: 0.5rem 0.6rem; background: rgba(254,254,254,0.95); border: 3px solid;
     box-shadow: 4px 4px 0 #0a0a0a; backdrop-filter: blur(8px);
   }
+  .upload-color-section { margin: 0.5rem 0; }
+  .color-indicator-tag {
+    display: inline-flex; align-items: center;
+    padding: 0.2rem 0.6rem; font: 700 0.6rem/1 'Space Grotesk', system-ui, sans-serif;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    background: #0a0a0a; color: #fefefe; border: 2px solid #0a0a0a;
+    margin-bottom: 0.15rem; box-shadow: 2px 2px 0 rgba(0,0,0,0.3);
+  }
+  .upload-color-card {
+    padding: 0.65rem 0.75rem; background: #fefefe; border: 3px solid;
+    box-shadow: 4px 4px 0 #0a0a0a;
+  }
+  .swatch-xl { width: 52px; height: 52px; border: 3px solid #0a0a0a; flex-shrink: 0; border-radius: 6px; }
+  .upload-icon-btn {
+    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    border: 2px solid #0a0a0a; background: #fefefe; cursor: pointer; font-size: 0.75rem; flex-shrink: 0; transition: all 0.15s;
+  }
+  .upload-icon-btn:hover { background: #ffd700; transform: scale(1.1); }
   .cam-icon-btn {
     width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
     border: 2px solid #0a0a0a; background: #fefefe; cursor: pointer; font-size: 0.7rem; flex-shrink: 0; transition: all 0.15s;
@@ -1366,10 +1679,14 @@
   .cam-dets-save:disabled { opacity: 0.5; }
   .cam-dets-list { overflow-y: auto; flex: 1; scrollbar-width: thin; }
   .cam-det-item {
-    display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.5rem;
+    display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.4rem;
     border-bottom: 1px solid rgba(10,10,10,0.06); cursor: pointer; transition: all 0.12s ease;
-    position: relative;
+    position: relative; border-left: 3px solid transparent;
   }
+  .cam-det-color { width: 48px; height: 48px; flex-shrink: 0; border: 3px solid #0a0a0a; border-radius: 4px; display: flex; align-items: flex-end; justify-content: center; padding: 1px; box-shadow: 0 0 10px var(--swatch-glow, transparent); }
+  .cam-det-hex { font: 700 0.4rem/1 monospace; background: rgba(10,10,10,0.75); color: #fff; padding: 1px 2px; border-radius: 1px; max-width: 42px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .det-color-box { width: 60px; height: 60px; flex-shrink: 0; border: 3px solid #0a0a0a; border-radius: 4px; display: flex; align-items: flex-end; justify-content: center; padding: 2px; box-shadow: 0 0 12px var(--swatch-glow, transparent); }
+  .det-color-hex { font: 700 0.45rem/1 monospace; background: rgba(10,10,10,0.75); color: #fff; padding: 1px 3px; border-radius: 1px; max-width: 54px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cam-det-item:hover { background: rgba(255,215,0,0.06); }
   .cam-det-item:active { background: rgba(255,215,0,0.15); transform: scale(0.98); }
   .cam-det-item.selected { background: linear-gradient(90deg, rgba(255,215,0,0.12), transparent); border-left: 3px solid #ffd700; box-shadow: inset 2px 0 0 #ffd700; }
@@ -1378,6 +1695,8 @@
   .cam-fav-btn { border: none; background: none; cursor: pointer; font-size: 0.75rem; color: #ddd; padding: 4px; transition: all 0.15s; }
   .cam-fav-btn:hover { color: #ff0033; transform: scale(1.25); text-shadow: 0 0 8px rgba(255,0,51,0.3); }
   .cam-fav-btn.saved { color: #ff0033; text-shadow: 0 0 6px rgba(255,0,51,0.3); }
+  .cam-fav-btn[aria-label="Save object"]:hover { color: #ffd700; text-shadow: 0 0 8px rgba(255,215,0,0.3); }
+  .cam-fav-btn[aria-label="Save object"].saved { color: #ffd700; text-shadow: 0 0 6px rgba(255,215,0,0.3); }
   .pal-mini { width: 12px; height: 8px; border: 1px solid rgba(10,10,10,0.25); flex-shrink: 0; border-radius: 1px; }
   .pal-mini-upload { width: 14px; height: 10px; border: 1px solid rgba(10,10,10,0.25); flex-shrink: 0; border-radius: 1px; }
   .retrain-link { font-size: 0.55rem; font-weight: 700; text-transform: uppercase; color: #ff6b35; text-decoration: underline wavy; cursor: pointer; letter-spacing: 0.03em; transition: color 0.15s; }
@@ -1412,7 +1731,7 @@
   .viewfinder { position: relative; width: 100%; border: 4px solid #0a0a0a; box-shadow: 6px 6px 0 #0a0a0a; overflow: hidden; background: #0a0a0a; }
   video, .img { width: 100%; display: block; }
   .viewfinder canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
-  .highlight-canvas { z-index: 3; pointer-events: none !important; }
+
   .upload-zone {
     display: flex; align-items: center; justify-content: center; min-height: 280px;
     border: 4px dashed #0a0a0a; box-shadow: 6px 6px 0 #0a0a0a; padding: 2rem; cursor: pointer; transition: all 0.2s;
@@ -1440,7 +1759,7 @@
   .detections-list { display: flex; flex-direction: column; gap: 0.25rem; max-height: 320px; overflow-y: auto; scrollbar-width: thin; }
   .detection-item {
     display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.5rem;
-    border: 2px solid transparent; cursor: pointer; transition: all 0.15s ease;
+    border: 2px solid transparent; border-left: 3px solid transparent; cursor: pointer; transition: all 0.15s ease;
     position: relative;
   }
   .detection-item:hover { border-color: #0a0a0a; background: rgba(255,215,0,0.05); transform: translateX(2px); }
@@ -1452,6 +1771,8 @@
   .fav-btn { border: none; background: none; cursor: pointer; font-size: 0.85rem; color: #999; padding: 4px; transition: all 0.15s; }
   .fav-btn:hover { color: #ff0033; transform: scale(1.25); text-shadow: 0 0 8px rgba(255,0,51,0.3); }
   .fav-btn.saved { color: #ff0033; text-shadow: 0 0 6px rgba(255,0,51,0.3); }
+  .fav-btn[aria-label="Save object"]:hover { color: #ffd700; text-shadow: 0 0 8px rgba(255,215,0,0.3); }
+  .fav-btn[aria-label="Save object"].saved { color: #ffd700; text-shadow: 0 0 6px rgba(255,215,0,0.3); }
   .palette-panel { padding: 0.75rem; }
   .color-chip { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem; border: 2px solid transparent; transition: all 0.15s; }
   .color-chip:hover { border-color: #0a0a0a; background: rgba(255,215,0,0.05); transform: translateX(2px); }

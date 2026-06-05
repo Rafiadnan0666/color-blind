@@ -5,8 +5,11 @@
   import { userSettings, userProfile, feedback, objectAnalytics } from '$lib/supabase/db';
   import { fly } from 'svelte/transition';
   import { browser } from '$app/environment';
+  import { setVoicePref } from '$lib/utils/voice';
+  import { setNotifPref, requestNotifPermission } from '$lib/utils/notifications';
 
   let initials = $state('');
+  let avatarError = $state(false);
   let settings = $state(null);
   let profile = $state(null);
   let stats = $state([]);
@@ -22,6 +25,7 @@
   let activeTab = $state('profile');
 
   let editName = $state('');
+  let editAvatarUrl = $state('');
   let editPreferredLanguage = $state('en');
   let editColorBlindMode = $state('none');
   let editVoiceEnabled = $state(true);
@@ -55,7 +59,9 @@
       settings = await userSettings.get();
       stats = await objectAnalytics.getStats();
       if (profile) {
+        avatarError = false;
         editName = profile.name || '';
+        editAvatarUrl = profile.avatarurl || '';
         editPreferredLanguage = profile.preferredlanguage || 'en';
         editColorBlindMode = profile.colorblindmode || 'none';
         editVoiceEnabled = profile.voiceenabled ?? true;
@@ -72,11 +78,14 @@
         editPreferredVoice = settings.preferredvoice || '';
         editPerfMode = settings.performancemode || 'balanced';
       }
+      setVoicePref(editVoiceEnabled, editPreferredVoice);
+      setNotifPref(editNotifEnabled);
     } catch (_) {}
   }
 
   function openEdit() {
     editName = profile?.name || '';
+    editAvatarUrl = profile?.avatarurl || '';
     editPreferredLanguage = profile?.preferredlanguage || 'en';
     editColorBlindMode = profile?.colorblindmode || 'none';
     editVoiceEnabled = profile?.voiceenabled ?? true;
@@ -88,7 +97,9 @@
     saving = true;
     try {
       await userProfile.upsert({
+        email: $user?.email,
         name: editName,
+        avatarurl: editAvatarUrl || null,
         preferredlanguage: editPreferredLanguage,
         colorblindmode: editColorBlindMode,
         voiceenabled: editVoiceEnabled,
@@ -106,6 +117,9 @@
         performancemode: editPerfMode,
       });
       if (browser) localStorage.setItem('clrblind_notif', JSON.stringify(editNotifEnabled));
+      setVoicePref(editVoiceEnabled, editPreferredVoice);
+      setNotifPref(editNotifEnabled);
+      if (editNotifEnabled) requestNotifPermission();
       profile = await userProfile.get();
       settings = await userSettings.get();
       editing = false; saved = true;
@@ -167,7 +181,11 @@
   {/if}
 
   <div class="profile-header brut-card">
-    <div class="brut-avatar w-16 h-16 text-brut-2xl mx-auto">{initials}</div>
+    {#if profile?.avatarurl && !avatarError}
+      <img src={profile.avatarurl} alt="Avatar" class="avatar-img" onerror={() => avatarError = true} />
+    {:else}
+      <div class="brut-avatar w-16 h-16 text-brut-2xl mx-auto">{initials}</div>
+    {/if}
     <div class="text-center mt-3">
       <div class="font-brut text-brut-xl uppercase">{getGreeting()}!</div>
       <div class="font-brut text-brut-xs text-neo-darkgray mt-1">{$user?.email || ''}</div>
@@ -219,6 +237,14 @@
             <input class="brut-input text-brut-sm flex-1" bind:value={editName} maxlength="100" />
           {:else}
             <span class="field-value">{profile?.name || 'Not set'}</span>
+          {/if}
+        </div>
+        <div class="field-row">
+          <span class="field-label">Avatar URL</span>
+          {#if editing}
+            <input class="brut-input text-brut-sm flex-1" bind:value={editAvatarUrl} placeholder="https://..." />
+          {:else}
+            <span class="field-value truncate">{profile?.avatarurl || 'Not set'}</span>
           {/if}
         </div>
         <div class="field-row">
@@ -422,6 +448,7 @@
   .link-item i:first-child { width: 20px; text-align: center; color: #ff3366; }
   .link-item span { flex: 1; }
   .link-item i:last-child { font-size: 0.6rem; color: #888; }
+  .avatar-img { width: 64px; height: 64px; border: 3px solid #0a0a0a; object-fit: cover; margin: 0 auto; }
   .stars { display: flex; gap: 0.25rem; }
   .star-btn { border: none; background: none; font-size: 1.5rem; cursor: pointer; padding: 2px; color: #ccc; transition: all 0.15s; }
   .star-btn.active { color: #ffd700; }

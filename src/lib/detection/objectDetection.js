@@ -6,25 +6,20 @@ import {
   getMobileNetColor,
   getMobileNetModelKeys
 } from './mobilenetDetection';
-
 const CLASS_NAMES = [
   'ripe_apple', 'unripe_apple', 'ripe_banana', 'unripe_banana',
   'ripe_orange', 'unripe_orange', 'ripe_strawberry', 'unripe_strawberry',
   'ripe_tomato', 'unripe_tomato', 'plant', 'other_object',
 ];
-
 let gallery = [];
 let galleryLabels = [];
-
 function hashColor(str) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
   return `hsl(${Math.abs(hash) % 360}, 65%, 50%)`;
 }
-
 let tfModelLoaded = false;
 let mobilenetModelsLoaded = new Set();
-
 export async function loadModel() {
   if (!tfModelLoaded) {
     tfModelLoaded = true;
@@ -35,15 +30,12 @@ export async function loadModel() {
     }
   }
 }
-
 export async function loadMobileNetModelForMode(mode) {
   if (mobilenetModelsLoaded.has(mode)) return;
   mobilenetModelsLoaded.add(mode);
   await loadMobileNetModel(mode);
 }
-
 export { CLASS_NAMES as YOLO_CLASSES };
-
 export async function detectObjects(source) {
   try {
     const results = await detectTF(source);
@@ -53,11 +45,9 @@ export async function detectObjects(source) {
     return [];
   }
 }
-
 export function getColor(label) {
   return getTFColor(label) || hashColor(label);
 }
-
 export function pickNearestCenter(dets, cw, ch) {
   if (!dets || !dets.length) return null;
   const cx = cw / 2, cy = ch / 2;
@@ -71,14 +61,11 @@ export function pickNearestCenter(dets, cw, ch) {
   }
   return best;
 }
-
 export function getEmbedding() { return null; }
-
 export function addToGallery(embedding, label) {
   gallery.push(embedding);
   galleryLabels.push(label);
 }
-
 export function searchGallery(queryEmbedding, topK = 5) {
   if (gallery.length === 0) return [];
   const scores = gallery.map((emb, i) => {
@@ -89,5 +76,4 @@ export function searchGallery(queryEmbedding, topK = 5) {
   scores.sort((a, b) => b.score - a.score);
   return scores.slice(0, topK);
 }
-
-export function getGallerySize() { return gallery.length; }
+export function getGallerySize() { return gallery.length; }

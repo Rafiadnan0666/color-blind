@@ -3,10 +3,10 @@
   import { goto } from '$app/navigation';
 </script>
 
-<!-- Hero Section -->
+
 <div class="min-h-screen bg-gradient-to-br from-neo-white via-blue-50 to-purple-50 flex items-center justify-center px-4">
   <div class="max-w-4xl mx-auto text-center">
-    <!-- Main Heading -->
+    
     <div class="brut-card border-4 border-neo-black bg-yellow-100 mb-8 inline-block">
       <h1 class="brut-heading text-brut-5xl uppercase tracking-tighter">
         <i class="fas fa-eye text-blue-600 mr-3"></i>Color Blind<i class="fas fa-lightbulb text-yellow-500 ml-3"></i>
@@ -17,7 +17,7 @@
       Advanced AI-powered color blindness detection to build truly accessible designs
     </p>
 
-    <!-- CTA Button -->
+    
     {#if $session}
       <a href="/dashboard" class="brut-btn-primary text-brut-lg px-8 py-4 inline-block">
         Go to Dashboard
@@ -35,13 +35,13 @@
   </div>
 </div>
 
-<!-- Features Section -->
+
 <div class="bg-neo-white py-20 px-4">
   <div class="max-w-6xl mx-auto">
     <h2 class="brut-heading text-brut-4xl text-center mb-16 uppercase">Why Choose ClrBlind?</h2>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-      <!-- Feature 1 -->
+      
       <div class="brut-card border-3 border-neo-black bg-cyan-100 hover:shadow-brut-lg transition-all">
         <div class="text-brut-4xl mb-4">
           <i class="fas fa-robot text-cyan-600"></i>
@@ -52,7 +52,7 @@
         </p>
       </div>
 
-      <!-- Feature 2 -->
+      
       <div class="brut-card border-3 border-neo-black bg-pink-100 hover:shadow-brut-lg transition-all">
         <div class="text-brut-4xl mb-4">
           <i class="fas fa-bolt text-pink-600"></i>
@@ -63,7 +63,7 @@
         </p>
       </div>
 
-      <!-- Feature 3 -->
+      
       <div class="brut-card border-3 border-neo-black bg-green-100 hover:shadow-brut-lg transition-all">
         <div class="text-brut-4xl mb-4">
           <i class="fas fa-shield-alt text-green-600"></i>
@@ -77,13 +77,13 @@
   </div>
 </div>
 
-<!-- Color Blindness Info Section -->
+
 <div class="bg-gradient-to-r from-purple-100 to-blue-100 py-20 px-4">
   <div class="max-w-6xl mx-auto">
     <h2 class="brut-heading text-brut-4xl text-center mb-16 uppercase">About Color Blindness</h2>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-      <!-- Info 1 -->
+      
       <div class="brut-card border-3 border-neo-black bg-yellow-100">
         <h3 class="brut-heading text-brut-2xl mb-4 uppercase">
           <i class="fas fa-users text-yellow-600 mr-2"></i>The Numbers
@@ -96,7 +96,7 @@
         </p>
       </div>
 
-      <!-- Info 2 -->
+      
       <div class="brut-card border-3 border-neo-black bg-orange-100">
         <h3 class="brut-heading text-brut-2xl mb-4 uppercase">
           <i class="fas fa-palette text-orange-600 mr-2"></i>Common Types
@@ -111,7 +111,7 @@
   </div>
 </div>
 
-<!-- How It Works Section -->
+
 <div class="bg-neo-white py-20 px-4">
   <div class="max-w-4xl mx-auto">
     <h2 class="brut-heading text-brut-4xl text-center mb-16 uppercase">How It Works</h2>
@@ -156,7 +156,7 @@
   </div>
 </div>
 
-<!-- CTA Footer -->
+
 <div class="bg-gradient-to-r from-cyan-100 to-blue-100 py-20 px-4 text-center border-t-4 border-neo-black">
   <div class="max-w-2xl mx-auto">
     <h2 class="brut-heading text-brut-4xl mb-4 uppercase">Ready to Begin?</h2>

@@ -3,7 +3,7 @@
   import { fly } from 'svelte/transition';
   import { loadQnA, findAnswers } from '$lib/detection/qnaDetection';
   import { assistantHistory } from '$lib/supabase/db';
-  import { session } from '$lib/stores/auth';
+  import { session, isAuthLoading } from '$lib/stores/auth';
   import { goto } from '$app/navigation';
 
   let messages = $state([]);
@@ -12,30 +12,17 @@
   let loading = $state(true);
   let isGuest = $state(true);
 
-  const intents = {
-    color: 'I can help identify and describe colors. Try pointing your camera at something colorful!',
-    object: 'I can help identify objects using our detection engines. Switch to scan mode to see what objects are around you.',
-    contrast: 'High contrast mode can be enabled in your profile settings. This makes text and UI elements more distinct.',
-    cvd: 'Color Vision Deficiency (CVD) affects how people perceive colors. The most common types are protanopia (red-blind), deuteranopia (green-blind), and tritanopia (blue-blind). Our app can simulate these conditions.',
-    feature: 'Our app has several features: Object Detection, Color Detection, OCR Text Extraction, Color Blindness Simulation, Scene Classification, and an AI Assistant.',
-    guide: 'To get started: 1) Go to Scan mode 2) Point your camera at objects 3) The AI will detect and describe colors 4) Save your favorites!',
-    ocr: 'Our OCR feature can extract text from images. Go to the OCR page and upload an image containing text.',
-    settings: 'You can customize your experience in Profile Settings: toggle notifications, adjust detection preferences, and more.',
-    hello: 'Hello! I\'m your color blindness detection assistant. How can I help you today?',
-    help: 'I can help with: • Color identification & blindness info • Object detection guide • App features & navigation • OCR text extraction • Accessibility tips • Settings & customization',
-  };
+  let lmSession = $state(null);
+  let qnaReady = $state(false);
+  let aiReady = $state(false);
 
-  const fallbackAnswers = [
-    'I can help with color blindness detection, object identification, OCR, and app navigation. Try asking about a specific feature!',
-    'Great question! For color-related queries, try using our detection mode with the camera. For general info, I can explain color vision deficiencies.',
-    'You can learn more about our features by visiting the Dashboard. Each feature has detailed instructions and tooltips.',
-    'For best results with object detection, ensure good lighting and hold the camera steady. Our fusion mode combines multiple AI models.',
-    'Color blindness affects approximately 1 in 12 men and 1 in 200 women worldwide. Our app helps make content more accessible.',
-  ];
+  const appContext = 'ClrBlind is an app for color blindness detection and accessibility. Features: object detection (COCO-SSD, MobileNet), color detection (RGB/HSL analysis, color naming, CVD simulation), OCR text extraction (Tesseract.js), scene classification (TFJS model), AI assistant, scan history, saved colors, favorites. Color blindness types: protanopia (red-blind), deuteranopia (green-blind), tritanopia (blue-blind). WCAG contrast ratio minimum: 4.5:1.';
+
+  const WELCOME = 'Hey! I\'m your ClrBlind AI assistant. I use real AI to answer questions about color blindness, object detection, color analysis, accessibility, and app features. Ask me anything!';
 
   $effect(() => {
     isGuest = !$session;
-    if ($session !== undefined) load();
+    if (!$isAuthLoading) load();
   });
 
   async function load() {
@@ -49,66 +36,46 @@
     } catch (_) { messages = []; }
     loading = false;
     if (messages.length === 0 && !isGuest) {
-      messages.push({ role: 'assistant', text: intents.hello, ts: new Date().toISOString() });
+      messages.push({ role: 'assistant', text: WELCOME, ts: new Date().toISOString() });
     }
   }
 
-  function getIntent(text) {
-    const lower = text.toLowerCase();
-    if (/\b(hi|hello|hey|greet|sup|howdy)\b/.test(lower)) return 'hello';
-    if (/\b(color|colour|red|blue|green|yellow|purple|pink)\b/.test(lower) && !/\b(blind|deficient|vision|cvd)\b/.test(lower)) return 'color';
-    if (/\b(object|detect|find|see|scan|identify)\b/.test(lower)) return 'object';
-    if (/\b(contrast|readab|visibility)\b/.test(lower)) return 'contrast';
-    if (/\b(blind|color.?blind|cvd|deuteranopia|protanopia|tritanopia|deficient|vision)\b/.test(lower)) return 'cvd';
-    if (/\b(feature|capabilit|what can|do you|function)\b/.test(lower)) return 'feature';
-    if (/\b(guide|tutorial|how.?to|get.?start|beginner|help)\b/.test(lower)) return 'guide';
-    if (/\b(ocr|text|read|extract|character)\b/.test(lower)) return 'ocr';
-    if (/\b(setting|preference|profile|config)\b/.test(lower)) return 'settings';
-    if (/\b(help|support|assist|what can you|capabilities)\b/.test(lower)) return 'help';
-    return null;
-  }
-
-  let aiSession = $state(null);
-  let qnaReady = $state(false);
-
-  async function getBuiltInAISession() {
+  async function initAI() {
     try {
-      const LM = /** @type {any} */ (self).LanguageModel;
-      if (!LM) return null;
-      const opts = {
-        expectedOutputs: [{ type: "text", languages: ["en"] }],
-        systemPrompt: "You are a color blindness assistant. Answer concisely about color vision, accessibility, object detection, and the app's features. Keep answers under 3 sentences."
-      };
-      const avail = await LM.availability(opts);
-      if (avail === 'unavailable') return null;
-      if (avail === 'after-download') {
-        console.log('[AI] Downloading model...');
-        const session = await LM.create({
-          ...opts,
-          monitor(m) {
-            m.addEventListener('downloadprogress', (e) => console.log(`[AI] Download: ${(e.loaded * 100).toFixed(1)}%`));
-            m.addEventListener('statechange', (e) => console.log('[AI] State:', e.target.state));
-          }
-        });
-        console.log('[AI] Session ready');
-        return session;
+      const LM =  (self).LanguageModel;
+      if (LM) {
+        const opts = { expectedOutputs: [{ type: 'text', languages: ['en'] }] };
+        const avail = await LM.availability(opts);
+        if (avail !== 'unavailable') {
+          try {
+            lmSession = await LM.create({ ...opts, systemPrompt: 'You are a color blindness assistant. Answer concisely about color vision, accessibility, and the ClrBlind app.' });
+            if (lmSession) { aiReady = true; return; }
+          } catch (_) { lmSession = null; }
+        }
       }
-      const session = await LM.create(opts);
-      return session;
-    } catch (_) { return null; }
+    } catch (_) {}
+    try {
+      await loadQnA();
+      qnaReady = true;
+      aiReady = true;
+    } catch (_) { aiReady = false; }
   }
 
   onMount(async () => {
-    aiSession = await getBuiltInAISession();
-    try { await loadQnA(); qnaReady = true; } catch (_) {}
+    await initAI();
   });
 
-  const appContext = Object.values(intents).join(' ') + ' The app features include: object detection, color detection, OCR text extraction, color blindness simulation, scene classification, and an AI assistant.';
-
-  function generateAnswer(question) {
-    const intent = getIntent(question);
-    if (intent && intents[intent]) return intents[intent];
-    return fallbackAnswers[Math.floor(Math.random() * fallbackAnswers.length)];
+  async function getAIAnswer(question) {
+    if (lmSession) {
+      try { return await lmSession.prompt(question); } catch (_) {}
+    }
+    if (qnaReady) {
+      try {
+        const answers = await findAnswers(question, appContext);
+        if (answers.length > 0 && answers[0].score > 0.01) return answers[0].text;
+      } catch (_) {}
+    }
+    return 'I\'m processing your question. The AI model is loading. Please try again in a moment.';
   }
 
   async function send() {
@@ -117,14 +84,7 @@
     input = '';
     sending = true;
     messages = [...messages, { role: 'user', text, ts: new Date().toISOString() }];
-    let answer = null;
-    if (aiSession) {
-      try { answer = await aiSession.prompt(text); } catch (_) {}
-    }
-    if (!answer && qnaReady) {
-      try { const answers = await findAnswers(text, appContext); if (answers.length > 0) answer = answers[0].text; } catch (_) {}
-    }
-    if (!answer) answer = generateAnswer(text);
+    const answer = await getAIAnswer(text);
     messages = [...messages, { role: 'assistant', text: answer, ts: new Date().toISOString() }];
     try { await assistantHistory.create({ question: text, answer }); } catch (_) {}
     sending = false;

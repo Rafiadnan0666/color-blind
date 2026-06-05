@@ -16,9 +16,7 @@
     if (m) success = m;
   });
 
-  /**
-   * @param {Event} e
-   */
+  
   async function handleEmailLogin(e) {
     e.preventDefault();
     error = '';

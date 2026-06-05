@@ -16,7 +16,7 @@
   onMount(() => {
     checkRecovery();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((/** @type {string} */ event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(( event) => {
       if (event === 'PASSWORD_RECOVERY') {
         isRecoverySession = true;
         checking = false;
@@ -43,9 +43,7 @@
     checking = false;
   }
 
-  /**
-   * @param {Event} e
-   */
+  
   async function handleUpdatePassword(e) {
     e.preventDefault();
     error = '';

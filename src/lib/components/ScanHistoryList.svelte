@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { scanHistory } from '$lib/supabase/db';
-  import { session, user } from '$lib/stores/auth';
+  import { session, user, isAuthLoading } from '$lib/stores/auth';
   import { goto } from '$app/navigation';
   import { slide } from 'svelte/transition';
 
@@ -15,7 +15,7 @@
 
   $effect(() => {
     isGuest = !$session;
-    if ($session !== undefined) load();
+    if (!$isAuthLoading) load();
   });
 
   async function load() {
@@ -74,7 +74,7 @@
 <div class="history-panel">
   <div class="panel-header">
     <div class="font-brut text-brut-lg uppercase">
-      <i class="fas fa-clock-rotate mr-2 text-neo-pink"></i> Scan History
+      <i class="fas fa-history mr-2 text-neo-pink"></i> Scan History
       {#if !isGuest && totalCount > 0}
         <span class="text-neo-darkgray text-brut-xs ml-2">({totalCount})</span>
       {/if}

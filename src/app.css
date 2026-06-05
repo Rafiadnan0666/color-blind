@@ -131,6 +131,14 @@
     @apply w-10 h-10 border-brut border-neo-black bg-neo-yellow
            flex items-center justify-center font-brut text-brut-lg;
   }
+  .nav-avatar {
+    width: 32px; height: 32px; border: 2px solid #0a0a0a;
+    object-fit: cover; flex-shrink: 0;
+  }
+  .dash-avatar {
+    width: 96px; height: 96px; border: 4px solid #0a0a0a;
+    object-fit: cover; flex-shrink: 0;
+  }
 }
 
 @layer utilities {
@@ -140,26 +148,88 @@
 }
 
 @keyframes pulse-glow {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(12px); }
+  from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-left {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 @keyframes scale-in {
-  from { opacity: 0; transform: scale(0.9); }
+  from { opacity: 0; transform: scale(0.85); }
   to { opacity: 1; transform: scale(1); }
 }
 
-.anim-pulse-glow { animation: pulse-glow 1.5s ease-in-out infinite; }
-.anim-slide-up { animation: slide-up 0.25s ease-out; }
-.anim-scale-in { animation: scale-in 0.2s ease-out; }
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes breathe {
+  0%, 100% { border-color: #0a0a0a; }
+  50% { border-color: #ffd700; }
+}
+
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.anim-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+.anim-slide-up { animation: slide-up 0.35s ease-out both; }
+.anim-slide-down { animation: slide-down 0.3s ease-out both; }
+.anim-slide-left { animation: slide-in-left 0.3s ease-out both; }
+.anim-slide-right { animation: slide-in-right 0.3s ease-out both; }
+.anim-scale-in { animation: scale-in 0.25s ease-out both; }
+.anim-float { animation: float 3s ease-in-out infinite; }
+.anim-breathe { animation: breathe 1.5s ease-in-out infinite; }
+
+.anim-stagger > * {
+  opacity: 0;
+  animation: slide-up 0.35s ease-out forwards;
+}
+.anim-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.anim-stagger > *:nth-child(2) { animation-delay: 60ms; }
+.anim-stagger > *:nth-child(3) { animation-delay: 120ms; }
+.anim-stagger > *:nth-child(4) { animation-delay: 180ms; }
+.anim-stagger > *:nth-child(5) { animation-delay: 240ms; }
+.anim-stagger > *:nth-child(6) { animation-delay: 300ms; }
+.anim-stagger > *:nth-child(7) { animation-delay: 360ms; }
+.anim-stagger > *:nth-child(8) { animation-delay: 420ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 
 @media (hover: none) {
   .brut-btn:hover, .brut-btn-primary:hover {
     transform: none;
+    box-shadow: 4px 4px 0px #0a0a0a;
   }
 }

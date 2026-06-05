@@ -1,27 +1,32 @@
 # ClrBlind — Color Blindness Detection & Accessibility App
 
-A fully client-side browser ML app that identifies objects and analyzes colors for people with color vision deficiency (CVD).
+A fully client-side browser ML app for visually impaired users. Identifies objects, analyzes colors, extracts text, and provides voice feedback — all running locally in the browser.
 
 ## Features
 
 - **8 Detection Modes**: Fusion, COCO, Traffic Light, Currency, Medicine, Products, Accessibility, Fruit
-- **Color Analysis**: Name, hex, RGB, HSL, palette extraction, contour detection
-- **CVD Simulation**: Protanopia, Deuteranopia, Tritanopia views
-- **Scene Classification**: Identifies garden, kitchen, orchard, supermarket
-- **All ML runs in-browser** — no server calls, no data leakage
+- **Color Analysis**: Name, hex, RGB, HSL, palette extraction, CVD simulation (protanopia/deuteranopia/tritanopia)
+- **OCR Scanner**: Extract text from images using Tesseract.js, auto-saves to history
+- **Voice Feedback**: Speaks detected object names and colors via browser SpeechSynthesis
+- **AI Assistant**: Ask questions about detected objects and colors
+- **Saved Colors & Objects**: Full CRUD with detail modals, inline editing
+- **Favorites**: Save and manage favorite detections
+- **Scan History**: Browse past detections with pagination
+- **Notifications**: In-app + native push notifications
+- **Profile**: Avatar, settings, CVD mode, theme, performance mode
+- **Scene Classification**: Identifies garden, kitchen, orchard, supermarket, indoor/outdoor
+- **All ML runs in-browser** — ONNX Runtime Web + TensorFlow.js, no server calls
 
 ## ML Architecture
 
 | Mode | Model | Backend |
 |------|-------|---------|
-| Fusion / COCO / Fruit | COCO-SSD | TensorFlow.js (MobileNetV2) |
-| Traffic Light | SSD MobileNetV2 | TensorFlow.js |
-| Currency (7 rupiah) | SSD MobileNetV2 | TensorFlow.js |
-| Medicine (4 pills) | SSD MobileNetV2 | TensorFlow.js |
-| Products (44 Indian) | SSD MobileNetV2 | TensorFlow.js |
-| Accessibility (4 signs) | SSD MobileNetV2 | TensorFlow.js |
-
-**All custom models use MobileNetV2 backbone** (converted from YOLOv8 ONNX) for faster, lighter browser inference.
+| Fusion / COCO / Fruit | COCO-SSD (MobileNetV2) | TensorFlow.js |
+| Traffic Light | YOLOv8 → ONNX | ONNX Runtime Web |
+| Currency (7 rupiah) | YOLOv8 → ONNX | ONNX Runtime Web |
+| Medicine (4 pills) | MobileNetV2 TFJS | TensorFlow.js |
+| Products (44 Indian) | YOLOv8 → ONNX | ONNX Runtime Web |
+| Accessibility (4 signs) | YOLOv8 → ONNX | ONNX Runtime Web |
 
 ## Quick Start
 
@@ -30,57 +35,59 @@ npm install
 npm run dev
 ```
 
-## Training Custom Models
-
-See `training/README.md` for the JupyterLab-based training pipeline:
+## Build
 
 ```bash
-cd training
-pip install -r requirements.txt
-jupyter lab
+npm run build
+npm run preview
 ```
 
-Opens `notebooks/01_mobilenetv2_training_pipeline.ipynb` — runs on CPU or GPU, exports directly to TFJS.
+## Tech Stack
 
-## Dataset Sources
-
-| Model | Source | Link |
-|-------|--------|------|
-| Accessibility | Kaggle — Road Sign Detection | [andrewmvd/road-sign-detection](https://www.kaggle.com/datasets/andrewmvd/road-sign-detection) |
-| Traffic Light | Roboflow | [Traffic Light Dataset](https://universe.roboflow.com/traffic-light-detection-qsrxn/traffic-light-oq7uj) |
-| Currency | Custom | Collect Indonesian rupiah images |
-| Medicine | Custom | Collect pill packaging images |
-| Products | Custom | Collect Indian FMCG product images |
+- **SvelteKit 2** — Full-stack framework
+- **TensorFlow.js 4** — COCO-SSD inference
+- **ONNX Runtime Web** — YOLO model inference (wasm + threads)
+- **Tesseract.js** — OCR text extraction
+- **Supabase** — Auth, database, notifications
+- **Font Awesome 7** — Icons
+- **Neo-brut design** — Custom CSS design system
 
 ## Project Structure
 
 ```
 src/
   lib/
-    detection/
-      mobilenetDetection.js   — MobileNetV2 TFJS inference engine
-      tfDetection.js          — COCO-SSD wrapper
-      objectDetection.js      — Detection orchestrator
-      sceneClassifier.js      — Scene classification
-      colorDetection.js       — Color analysis utilities
-      yoloDetection.js        — [Deprecated] YOLO ONNX fallback
+    detection/          — ML detection engines (TFJS + ONNX)
+    supabase/db.js      — Database CRUD operations
+    utils/
+      voice.js          — Text-to-speech utility
+      notifications.js  — Push notification helper
+    components/         — Reusable UI components
   routes/
-    detects/+page.svelte      — Main detection UI
-training/
-  notebooks/                  — JupyterLab training notebooks
-  configs/                    — Dataset YAML configs
-  datasets/                   — Downloaded/prepared datasets
-  exported_models/            — SavedModel checkpoints
+    detects/            — Main detection UI (camera + upload)
+    ocr/                — OCR scanner
+    assistant/          — AI assistant chat
+    dashboard/          — User dashboard
+    profile/            — Profile & settings
+    saved-colors/       — Saved colors CRUD
+    saved-objects/      — Saved objects CRUD
+    history/            — Scan history
+    favorites/          — Favorites list
+    notifications/      — Notifications panel
 static/
-  model_mobilenet/            — TFJS deployed models
-  model_onnx/                 — [Legacy] YOLO ONNX models
-  model_scene/                — Scene classifier
+  model_mobilenet/      — Deployed TFJS models
+  model_onnx/           — ONNX YOLO models
 ```
 
-## Tech Stack
+## Environment
 
-- **SvelteKit 2** — Full-stack framework
-- **TensorFlow.js 4** — ML inference in browser
-- **Tailwind CSS** — Neo-brut design system
-- **Supabase** — Auth, DB, notifications
-- **Prisma** — PostgreSQL ORM
+Create `.env.local`:
+
+```env
+PUBLIC_SUPABASE_URL=your_supabase_url
+PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
+
+## Deployment
+
+Supports Vercel and Netlify zero-config deployment. WASM MIME types are configured via `vercel.json` / `netlify.toml`.

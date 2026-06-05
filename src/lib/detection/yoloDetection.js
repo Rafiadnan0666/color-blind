@@ -1,13 +1,10 @@
 import * as ort from 'onnxruntime-web';
-
 ort.env.wasm.wasmPaths = '/wasm/';
-
 function hashColor(str) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
   return `hsl(${Math.abs(hash) % 360}, 70%, 55%)`;
 }
-
 const DISPLAY_NAMES = {
   traffic_light_red: 'Red Light', traffic_light_green: 'Green Light', traffic_light_yellow: 'Yellow Light',
   rp1000: 'Rp 1.000', rp2000: 'Rp 2.000', rp5000: 'Rp 5.000', rp10000: 'Rp 10.000',
@@ -29,7 +26,6 @@ const DISPLAY_NAMES = {
   munch: 'Munch', 'parle-G': 'Parle-G',
   crosswalk: 'Crosswalk', speedlimit: 'Speed Limit', stop: 'Stop Sign', trafficlight: 'Traffic Light',
 };
-
 const MODELS = {
   traffic_light: {
     path: '/model_onnx/traffic_light_yolov8n.onnx',
@@ -67,18 +63,15 @@ const MODELS = {
     colors: { stop: '#ff0033', trafficlight: '#ffcc00', crosswalk: '#00ccff', speedlimit: '#ff9900' },
   },
 };
-
 const INPUT_SIZE = 640;
 const CONF_THRESHOLD = 0.25;
 const IOU_THRESHOLD = 0.45;
-
 let sessions = {};
 let loadAttempted = {};
 let _origW = 0, _origH = 0;
 let _scaleX = 1, _scaleY = 1;
 let _padX = 0, _padY = 0;
 let preprocessCanvas = null;
-
 export async function loadYoloModel(modelKey = 'traffic_light') {
   if (loadAttempted[modelKey]) return;
   loadAttempted[modelKey] = true;
@@ -93,13 +86,10 @@ export async function loadYoloModel(modelKey = 'traffic_light') {
     console.error(`[MODEL_LOAD_ERROR] YOLO[${modelKey}]:`, e?.message || e);
   }
 }
-
 export async function loadAllYoloModels() {
   await Promise.allSettled(Object.keys(MODELS).map(k => loadYoloModel(k)));
 }
-
 function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
-
 function preprocess(source) {
   if (!preprocessCanvas) preprocessCanvas = document.createElement('canvas');
   const cvs = preprocessCanvas;
@@ -143,7 +133,6 @@ function preprocess(source) {
   }
   return new ort.Tensor('float32', float32Data, [1, 3, INPUT_SIZE, INPUT_SIZE]);
 }
-
 function decodeDetections(output, classNames) {
   const numClasses = classNames.length;
   const data = output.data;
@@ -196,14 +185,12 @@ function decodeDetections(output, classNames) {
   }
   return keep;
 }
-
 function iou(a, b) {
   const x1 = Math.max(a.x1, b.x1), y1 = Math.max(a.y1, b.y1);
   const x2 = Math.min(a.x2, b.x2), y2 = Math.min(a.y2, b.y2);
   const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
   return inter / ((a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - inter + 1e-6);
 }
-
 export async function detectYolo(source, modelKey = 'traffic_light') {
   if (!sessions[modelKey]) { console.warn(`YOLO[${modelKey}]: session not loaded`); return []; }
   const session = sessions[modelKey];
@@ -218,7 +205,6 @@ export async function detectYolo(source, modelKey = 'traffic_light') {
   }
   return dets;
 }
-
 export function getYoloColor(label) {
   for (const cfg of Object.values(MODELS)) {
     if (cfg.colors[label]) return cfg.colors[label];
@@ -231,7 +217,6 @@ export function getYoloColor(label) {
   }
   return hashColor(label);
 }
-
 export function getYoloModelKeys() {
   return Object.keys(MODELS);
-}
+}

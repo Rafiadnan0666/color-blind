@@ -1,27 +1,18 @@
 import * as tf from '@tensorflow/tfjs';
-
 const SCENE_CLASSES = ['garden', 'orchard', 'indoor_kitchen', 'supermarket'];
 const MODEL_PATH = '/model_scene/model.json';
 const INPUT_SIZE = 224;
-
-/** @type {tf.GraphModel | null} */
 let model = null;
-
 export async function loadSceneModel() {
   if (model) return model;
   try {
     model = await tf.loadGraphModel(MODEL_PATH);
     return model;
-  } catch (/** @type {unknown} */ err) {
+  } catch ( err) {
     console.warn('Scene classifier TFJS model not found:', err instanceof Error ? err.message : err);
     return null;
   }
 }
-
-/**
- * @param {HTMLVideoElement | HTMLCanvasElement | HTMLImageElement} source
- * @returns {Promise<{scene: string, confidence: number, allScores?: Record<string, number>}>}
- */
 export async function classifyScene(source) {
   if (!model) {
     await loadSceneModel();
@@ -31,55 +22,40 @@ export async function classifyScene(source) {
   }
   return heuristicClassify(source);
 }
-
-/**
- * @param {HTMLVideoElement | HTMLCanvasElement | HTMLImageElement} source
- * @returns {Promise<{scene: string, confidence: number, allScores?: Record<string, number>}>}
- */
 async function classifyWithModel(source) {
   let imgTensor;
-  if (source instanceof HTMLVideoElement) {
-    imgTensor = tf.browser.fromPixels(source);
-  } else if (source instanceof HTMLCanvasElement) {
-    imgTensor = tf.browser.fromPixels(source);
-  } else if (source instanceof HTMLImageElement) {
-    imgTensor = tf.browser.fromPixels(source);
-  } else {
+  try {
+    if (source instanceof HTMLVideoElement) {
+      imgTensor = tf.browser.fromPixels(source);
+    } else if (source instanceof HTMLCanvasElement) {
+      imgTensor = tf.browser.fromPixels(source);
+    } else if (source instanceof HTMLImageElement) {
+      imgTensor = tf.browser.fromPixels(source);
+    } else {
+      return { scene: 'unknown', confidence: 0 };
+    }
+    const resized = tf.image.resizeBilinear(imgTensor, [INPUT_SIZE, INPUT_SIZE]);
+    const batched = resized.div(255.0).expandDims(0);
+    imgTensor.dispose();
+    resized.dispose();
+    if (!model) return { scene: 'unknown', confidence: 0 };
+    const predictions =  (model.predict(batched));
+    const scores = await predictions.data();
+    const scoreArray = Array.from(scores);
+    const maxIdx = scoreArray.indexOf(Math.max(...scoreArray));
+    const confidence = scoreArray[maxIdx];
+    batched.dispose();
+    predictions.dispose();
+    return {
+      scene: SCENE_CLASSES[maxIdx] || 'unknown',
+      confidence,
+      allScores: Object.fromEntries(SCENE_CLASSES.map((c, i) => [c, scoreArray[i]])),
+    };
+  } catch (e) {
+    if (imgTensor) try { imgTensor.dispose(); } catch (_) {}
     return { scene: 'unknown', confidence: 0 };
   }
-
-  const resized = tf.image.resizeBilinear(imgTensor, [INPUT_SIZE, INPUT_SIZE]);
-  const normalized = resized.div(255.0);
-  const batched = normalized.expandDims(0);
-
-  imgTensor.dispose();
-  resized.dispose();
-  normalized.dispose();
-
-  if (!model) return { scene: 'unknown', confidence: 0 };
-
-  const predictions = /** @type {tf.Tensor} */ (model.predict(batched));
-  const scores = await predictions.data();
-  const scoreArray = Array.from(scores);
-  const maxIdx = scoreArray.indexOf(Math.max(...scoreArray));
-  const confidence = scoreArray[maxIdx];
-
-  batched.dispose();
-  predictions.dispose();
-
-  return {
-    scene: SCENE_CLASSES[maxIdx] || 'unknown',
-    confidence,
-    allScores: Object.fromEntries(SCENE_CLASSES.map((c, i) => [c, scoreArray[i]])),
-  };
 }
-
-/**
- * @param {number} r
- * @param {number} g
- * @param {number} b
- * @returns {[number, number, number]}
- */
 function rgbToHsv(r, g, b) {
   r /= 255; g /= 255; b /= 255;
   const max = Math.max(r, g, b);
@@ -89,7 +65,6 @@ function rgbToHsv(r, g, b) {
   const v = max;
   const d = max - min;
   s = max === 0 ? 0 : d / max;
-
   if (max === min) {
     h = 0;
   } else {
@@ -101,11 +76,6 @@ function rgbToHsv(r, g, b) {
   }
   return [h, s * 100, v * 100];
 }
-
-/**
- * @param {HTMLVideoElement | HTMLCanvasElement | HTMLImageElement} source
- * @returns {{scene: string, confidence: number}}
- */
 function heuristicClassify(source) {
   let canvas;
   if (source instanceof HTMLCanvasElement) {
@@ -113,31 +83,24 @@ function heuristicClassify(source) {
   } else {
     return { scene: 'unknown', confidence: 0 };
   }
-
-  const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
+  const ctx =  (canvas.getContext('2d'));
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data;
-
   let totalGreen = 0;
   let totalBrown = 0;
   const pixelCount = data.length / 4;
-
   for (let i = 0; i < data.length; i += 4) {
     const r = data[i];
     const g = data[i + 1];
     const b = data[i + 2];
     const [h, s, v] = rgbToHsv(r, g, b);
-
     if (h > 35 && h < 170 && s > 20 && v > 20) totalGreen++;
     if ((h > 10 && h < 40) && s > 20 && v > 20 && v < 80) totalBrown++;
   }
-
   const greenRatio = totalGreen / pixelCount;
   const brownRatio = totalBrown / pixelCount;
-
   let scene = 'indoor_kitchen';
   let confidence = 0.4;
-
   if (greenRatio > 0.3) {
     scene = 'garden';
     confidence = Math.min(0.5 + greenRatio, 0.9);
@@ -151,13 +114,8 @@ function heuristicClassify(source) {
     scene = 'supermarket';
     confidence = 0.4;
   }
-
   return { scene, confidence };
 }
-
-/**
- * @param {string} scene
- */
 export function getSceneDescription(scene) {
   const descriptions = {
     'garden': 'This appears to be a garden setting with plants, flowers, and greenery.',
@@ -166,7 +124,6 @@ export function getSceneDescription(scene) {
     'supermarket': 'This looks like a supermarket or grocery store with produce displays.',
     'unknown': 'Unable to determine the scene type.',
   };
-  return descriptions[/** @type {keyof typeof descriptions} */ (scene)] || descriptions['unknown'];
+  return descriptions[ (scene)] || descriptions['unknown'];
 }
-
-export { SCENE_CLASSES };
+export { SCENE_CLASSES };

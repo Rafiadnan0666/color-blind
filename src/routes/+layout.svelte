@@ -4,13 +4,16 @@
   import { goto } from '$app/navigation';
   import { session, user, isAuthLoading, initializeAuthStores } from '$lib/stores/auth';
   import BottomNav from '$lib/components/BottomNav.svelte';
-  import { notifications, setUserId } from '$lib/supabase/db';
+  import { notifications, setUserId, userProfile } from '$lib/supabase/db';
   import { onMount } from 'svelte';
 
   let { children, data } = $props();
 
   let navOpen = $state(false);
   let unreadCount = $state(0);
+  let avatarUrl = $state('');
+  let profileName = $state('');
+  let avatarError = $state(false);
 
   $effect(() => {
     if (data) {
@@ -25,6 +28,7 @@
     if ($user?.id) {
       setUserId($user.id);
       loadUnreadCount();
+      userProfile.get().then(p => { if (p?.avatarurl) avatarUrl = p.avatarurl; if (p?.name) profileName = p.name; }).catch(() => {});
     }
   });
 
@@ -75,11 +79,15 @@
             </a>
             <span class="w-px h-6 bg-neo-black"></span>
             <div class="flex items-center gap-2 ml-2">
-            <div class="brut-avatar w-8 h-8 text-brut-sm">
-              {($user?.email ?? '?')[0].toUpperCase()}
-            </div>
+            {#if avatarUrl && !avatarError}
+              <img src={avatarUrl} alt="" class="nav-avatar" onerror={() => avatarError = true} />
+            {:else}
+              <div class="brut-avatar w-8 h-8 text-brut-sm">
+                {($user?.email ?? '?')[0].toUpperCase()}
+              </div>
+            {/if}
             <span class="font-brut text-brut-xs uppercase max-w-[120px] truncate">
-              {$user?.email ?? ''}
+              {profileName || $user?.email || ''}
             </span>
             <button onclick={handleSignOut} class="brut-btn text-sm px-3 py-1.5">
               Logout
@@ -100,11 +108,15 @@
             <div class="brut-spinner mx-auto"></div>
           {:else if $session}
             <div class="flex items-center gap-3 mb-2 pb-2 border-b-brut border-neo-black">
-              <div class="brut-avatar">
-                {($user?.email ?? '?')[0].toUpperCase()}
-              </div>
+              {#if avatarUrl && !avatarError}
+                <img src={avatarUrl} alt="" class="nav-avatar" onerror={() => avatarError = true} />
+              {:else}
+                <div class="brut-avatar">
+                  {($user?.email ?? '?')[0].toUpperCase()}
+                </div>
+              {/if}
               <div class="font-brut text-brut-xs uppercase truncate">
-                {$user?.email ?? ''}
+                {profileName || $user?.email || ''}
               </div>
             </div>
             <a href="/detects" class="brut-nav-link" class:brut-nav-link-active={isActive('/detects')}>

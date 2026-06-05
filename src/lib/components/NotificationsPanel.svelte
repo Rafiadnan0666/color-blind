@@ -1,13 +1,16 @@
 <script>
-  import { onMount } from 'svelte';
   import { notifications } from '$lib/supabase/db';
+  import { session, isAuthLoading } from '$lib/stores/auth';
   import { fly } from 'svelte/transition';
+  import { goto } from '$app/navigation';
 
   let items = $state([]);
   let loading = $state(true);
+  let isGuest = $state(true);
 
-  onMount(() => {
-    load();
+  $effect(() => {
+    isGuest = !$session;
+    if (!$isAuthLoading && $session !== undefined) load();
   });
 
   async function load() {
@@ -15,8 +18,8 @@
     try {
       items = await notifications.list();
     } catch (e) {
-      console.warn('Could not load notifications:', e);
-      items = [];
+      if (e?.message === 'auth_required') { items = []; }
+      else { console.warn('Could not load notifications:', e); items = []; }
     }
     loading = false;
   }
@@ -66,11 +69,18 @@
     <div class="font-brut text-brut-lg uppercase">
       <i class="fas fa-bell mr-2 text-neo-pink"></i> Notifications
     </div>
-    {#if items.some(i => !i.isread)}
-      <button class="brut-btn text-brut-xs px-3 py-1.5" onclick={markAllRead}>
-        <i class="fas fa-check-double mr-1"></i> Mark All Read
-      </button>
-    {/if}
+    <div class="flex gap-1">
+      {#if !isGuest && items.some(i => !i.isread)}
+        <button class="brut-btn text-brut-xs px-3 py-1.5" onclick={markAllRead}>
+          <i class="fas fa-check-double mr-1"></i> Mark All Read
+        </button>
+      {/if}
+      {#if !isGuest}
+        <button class="brut-btn text-brut-xs px-3 py-1.5" onclick={load} aria-label="Refresh">
+          <i class="fas fa-rotate"></i>
+        </button>
+      {/if}
+    </div>
   </div>
 
   {#if loading}
@@ -81,8 +91,15 @@
   {:else if items.length === 0}
     <div class="empty-state">
       <div class="text-3xl opacity-30 mb-2"><i class="fas fa-bell"></i></div>
-      <div class="font-brut text-brut-sm uppercase">All clear</div>
-      <div class="text-brut-xs text-neo-darkgray">No notifications yet.</div>
+      {#if isGuest}
+        <div class="font-brut text-brut-sm uppercase">Sign in for notifications</div>
+        <button class="brut-btn-primary mt-3 text-brut-xs px-4 py-2" onclick={() => goto('/auth/login')}>
+          <i class="fas fa-right-to-bracket mr-1"></i> Sign In
+        </button>
+      {:else}
+        <div class="font-brut text-brut-sm uppercase">All clear</div>
+        <div class="text-brut-xs text-neo-darkgray">No notifications yet.</div>
+      {/if}
     </div>
   {:else}
     <div class="items-list">

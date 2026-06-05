@@ -1,5 +1,6 @@
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-backend-webgl';
+import { loadYoloModel, detectYolo, getYoloColor } from './yoloDetection';
 
 const INPUT_SIZE = 320;
 
@@ -9,18 +10,21 @@ const MODELS = {
     classes: ['red', 'green', 'yellow'],
     colors: { red: '#ff0033', green: '#00cc44', yellow: '#ffcc00' },
     displayNames: { red: 'Red Light', green: 'Green Light', yellow: 'Yellow Light' },
+    useYolo: true,
   },
   currency: {
     path: '/model_mobilenet/currency/model.json',
     classes: ['rp1000', 'rp2000', 'rp5000', 'rp10000', 'rp20000', 'rp50000', 'rp100000'],
     colors: { rp1000: '#8B4513', rp2000: '#2E8B57', rp5000: '#4169E1', rp10000: '#8B008B', rp20000: '#006400', rp50000: '#B22222', rp100000: '#FF4500' },
     displayNames: { rp1000: 'Rp 1.000', rp2000: 'Rp 2.000', rp5000: 'Rp 5.000', rp10000: 'Rp 10.000', rp20000: 'Rp 20.000', rp50000: 'Rp 50.000', rp100000: 'Rp 100.000' },
+    useYolo: true,
   },
   medicine: {
     path: '/model_mobilenet/medicine/model.json',
     classes: ['paracetamol', 'panadol', 'amoxicillin', 'vitamin_c'],
     colors: { paracetamol: '#87CEEB', panadol: '#FFB6C1', amoxicillin: '#98FB98', vitamin_c: '#FFD700' },
     displayNames: { paracetamol: 'Paracetamol', panadol: 'Panadol', amoxicillin: 'Amoxicillin', vitamin_c: 'Vitamin C' },
+    useYolo: false,
   },
   local_products: {
     path: '/model_mobilenet/local_products/model.json',
@@ -52,12 +56,14 @@ const MODELS = {
       stayfree: 'Stayfree', thumbs_up: 'Thumbs Up', tomato_lays: 'Tomato Lays',
       vim_bar: 'Vim Bar', whisper: 'Whisper', wildstone: 'WildStone', yippee: 'Yippee',
     },
+    useYolo: true,
   },
   accessibility: {
     path: '/model_mobilenet/accessibility/model.json',
     classes: ['crosswalk', 'speedlimit', 'trafficlight'],
     colors: { trafficlight: '#ffcc00', crosswalk: '#00ccff', speedlimit: '#ff9900' },
     displayNames: { crosswalk: 'Crosswalk', speedlimit: 'Speed Limit', trafficlight: 'Traffic Light' },
+    useYolo: true,
   },
 };
 
@@ -78,6 +84,15 @@ export async function loadMobileNetModel(modelKey = 'traffic_light') {
   loadAttempted[modelKey] = true;
   const cfg = MODELS[modelKey];
   if (!cfg) return;
+  if (cfg.useYolo) {
+    try {
+      await loadYoloModel(modelKey);
+      sessions[modelKey] = { __yolo: true, modelKey };
+    } catch (e2) {
+      console.error(`[MODEL_LOAD_ERROR] ONNX YOLO failed for [${modelKey}]:`, e2?.message || e2);
+    }
+    return;
+  }
   try {
     await tf.ready();
     sessions[modelKey] = await tf.loadGraphModel(cfg.path);
@@ -91,18 +106,23 @@ export async function loadAllMobileNetModels() {
 }
 
 export async function detectMobileNet(source, modelKey = 'traffic_light') {
-  if (!sessions[modelKey]) {
+  const sess = sessions[modelKey];
+  if (!sess) {
     console.warn(`MobileNetV2[${modelKey}]: model not loaded`);
     return [];
   }
-  const session = sessions[modelKey];
+
+  if (sess.__yolo) {
+    const results = await detectYolo(source, modelKey);
+    return results.map(d => ({ ...d, model: 'mobilenet' }));
+  }
+
   const cfg = MODELS[modelKey];
-  // Add background class (last index) for SSD model compatibility
   const classNames = [...cfg.classes, '__background__'];
 
   try {
     const tensor = preprocess(source);
-    const predictions = await session.predict(tensor);
+    const predictions = await sess.predict(tensor);
     const outputs = Array.isArray(predictions) ? predictions : [predictions];
     tensor.dispose();
 
@@ -144,7 +164,6 @@ function decodeSSDOutputs(outputs, classNames) {
   const numClasses = classNames.length;
   const dets = [];
 
-  let scale = 1;
   for (let i = 0; i < outputs.length; i += 2) {
     const clsTensor = outputs[i];
     const boxTensor = outputs[i + 1];
@@ -166,7 +185,6 @@ function decodeSSDOutputs(outputs, classNames) {
           const clsOffset = ((cy * gridW + cx) * numAnchors + a) * numClasses;
           let maxScore = 0;
           let bestClass = -1;
-          // Skip last class (background)
           for (let c = 0; c < numClasses - 1; c++) {
             const score = clsData[clsOffset + c];
             if (score > maxScore) {
@@ -245,7 +263,7 @@ export function getMobileNetColor(label) {
       if (cfg.colors[rawLabel]) return cfg.colors[rawLabel];
     }
   }
-  return hashColor(label);
+  return getYoloColor(label) || hashColor(label);
 }
 
 export function getMobileNetModelKeys() {

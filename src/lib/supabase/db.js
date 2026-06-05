@@ -126,6 +126,16 @@ export const savedColors = {
     if (error) throw error;
     return data;
   },
+  async update(id, { colorName, hexCode, rgbValue }) {
+    const userid = await uid();
+    if (!userid) return;
+    const updates = {};
+    if (colorName !== undefined) updates.colorname = sanitize(colorName, 100);
+    if (hexCode !== undefined) updates.hexcode = sanitize(hexCode, 20);
+    if (rgbValue !== undefined) updates.rgbvalue = sanitize(rgbValue, 50);
+    const { error } = await supabase().from('SavedColors').update(updates).eq('id', id).eq('userid', userid);
+    if (error) throw error;
+  },
   async delete(id) {
     const userid = await uid();
     if (!userid) return;
@@ -148,6 +158,15 @@ export const savedObjects = {
     const { data, error } = await supabase().from('SavedObjects').select('*').eq('userid', userid).order('createdat', { ascending: false }).range(offset, offset + limit - 1);
     if (error) throw error;
     return data;
+  },
+  async update(id, { objectName, notes }) {
+    const userid = await uid();
+    if (!userid) return;
+    const updates = {};
+    if (objectName !== undefined) updates.objectname = sanitize(objectName, 200);
+    if (notes !== undefined) updates.notes = sanitize(notes, 500);
+    const { error } = await supabase().from('SavedObjects').update(updates).eq('id', id).eq('userid', userid);
+    if (error) throw error;
   },
   async delete(id) {
     const userid = await uid();

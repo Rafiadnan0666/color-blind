@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { favorites } from '$lib/supabase/db';
-  import { session, user } from '$lib/stores/auth';
+  import { session, user, isAuthLoading } from '$lib/stores/auth';
   import { goto } from '$app/navigation';
   import { slide } from 'svelte/transition';
 
@@ -11,7 +11,7 @@
 
   $effect(() => {
     isGuest = !$session;
-    if ($session !== undefined) load();
+    if (!$isAuthLoading) load();
   });
 
   async function load() {
