@@ -1,16 +1,12 @@
 import { notifications } from '$lib/supabase/db';
 import { browser } from '$app/environment';
-
-let _enabled = true;
-
-export function setNotifPref(enabled) {
-  _enabled = enabled;
-}
+import { get } from 'svelte/store';
+import { notifEnabled } from '$lib/stores/settings';
 
 export async function notify(title, message, type = 'general') {
   if (!browser) return;
   try {
-    if (_enabled && 'Notification' in window && Notification.permission === 'granted') {
+    if (get(notifEnabled) && 'Notification' in window && Notification.permission === 'granted') {
       new Notification(title, { body: message, icon: '/favicon.png' });
     }
   } catch (_) {}

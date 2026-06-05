@@ -5,8 +5,7 @@
   import { userSettings, userProfile, feedback, objectAnalytics } from '$lib/supabase/db';
   import { fly } from 'svelte/transition';
   import { browser } from '$app/environment';
-  import { setVoicePref } from '$lib/utils/voice';
-  import { setNotifPref, requestNotifPermission } from '$lib/utils/notifications';
+  import { rawSettings, rawProfile } from '$lib/stores/settings';
 
   let initials = $state('');
   let avatarError = $state(false);
@@ -59,6 +58,7 @@
       settings = await userSettings.get();
       stats = await objectAnalytics.getStats();
       if (profile) {
+        rawProfile.set(profile);
         avatarError = false;
         editName = profile.name || '';
         editAvatarUrl = profile.avatarurl || '';
@@ -68,6 +68,7 @@
         editHighContrast = profile.highcontrastmode ?? false;
       }
       if (settings) {
+        rawSettings.set(settings);
         editNotifEnabled = settings.notifications_enabled ?? true;
         editObjectDetection = settings.objectdetectionenabled ?? true;
         editColorDetection = settings.colordetectionenabled ?? true;
@@ -78,8 +79,6 @@
         editPreferredVoice = settings.preferredvoice || '';
         editPerfMode = settings.performancemode || 'balanced';
       }
-      setVoicePref(editVoiceEnabled, editPreferredVoice);
-      setNotifPref(editNotifEnabled);
     } catch (_) {}
   }
 
@@ -117,11 +116,10 @@
         performancemode: editPerfMode,
       });
       if (browser) localStorage.setItem('clrblind_notif', JSON.stringify(editNotifEnabled));
-      setVoicePref(editVoiceEnabled, editPreferredVoice);
-      setNotifPref(editNotifEnabled);
-      if (editNotifEnabled) requestNotifPermission();
       profile = await userProfile.get();
       settings = await userSettings.get();
+      rawProfile.set(profile);
+      rawSettings.set(settings);
       editing = false; saved = true;
       toast('Settings saved!');
     } catch (e) { toast('Could not save'); console.error(e); }

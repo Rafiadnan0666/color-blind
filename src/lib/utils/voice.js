@@ -1,23 +1,18 @@
 import { browser } from '$app/environment';
-
-let _enabled = true;
-let _voiceName = '';
-
-export function setVoicePref(enabled, name) {
-  _enabled = enabled;
-  _voiceName = name || '';
-}
+import { get } from 'svelte/store';
+import { voiceEnabled, voicePref } from '$lib/stores/settings';
 
 export function speak(text) {
-  if (!browser || !_enabled || !text) return;
+  if (!browser || !get(voiceEnabled) || !text) return;
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.rate = 0.9;
   u.pitch = 1;
-  if (_voiceName) {
+  const pref = get(voicePref);
+  if (pref) {
     const voices = window.speechSynthesis.getVoices();
-    const found = voices.find(v => v.name.includes(_voiceName));
+    const found = voices.find(v => v.name.includes(pref));
     if (found) u.voice = found;
   }
   window.speechSynthesis.speak(u);

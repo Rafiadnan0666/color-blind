@@ -10,7 +10,8 @@
   import { scanHistory, favorites, savedColors, savedObjects, objectAnalytics, userSettings } from '$lib/supabase/db';
   import { session, user } from '$lib/stores/auth';
   import { notifyScanComplete, notifyColorSaved, notifyFavoriteSaved } from '$lib/supabase/notifications';
-  import { speakColor, speakObject } from '$lib/utils/voice';
+  import { speakColor, speakObject } from '$lib/utils/voice';
+  import { perfMode, objectDetectionEnabled, colorDetectionEnabled, realtimeDetection } from '$lib/stores/settings';
   let video = $state(null);
   let overlay = $state(null);
   let status = $state('');
@@ -123,7 +124,7 @@
     }
     if (useCamera) {
       status = '';
-      const detInterval = 800;
+      const detInterval = $perfMode === 'performance' ? 1200 : $perfMode === 'quality' ? 400 : 800;
       detectTimer = setInterval(() => runDetectionFrame(true), detInterval);
       animId = requestAnimationFrame(drawLoop);
     } else if (imageSrc) {
@@ -326,7 +327,7 @@
       }
       classifyScene(video).then(s => { sceneInfo = s; }).catch(() => {});
       status = '';
-      const detInterval = 800;
+      const detInterval = $perfMode === 'performance' ? 1200 : $perfMode === 'quality' ? 400 : 800;
       detectTimer = setInterval(() => runDetectionFrame(true), detInterval);
       animId = requestAnimationFrame(drawLoop);
     } catch (e) {
@@ -474,8 +475,23 @@
     return cvs;
   }
 
+  async function detectFrameOnly(skipCheck) {
+    if (!$colorDetectionEnabled || !video || !overlay) return;
+    const cw = overlay.width, ch = overlay.height;
+    if (cw < 1 || ch < 1) return;
+    const swId = modeSwitchId;
+    const fc = sampleRegionColor(video, cw * 0.3, ch * 0.3, cw * 0.4, ch * 0.4);
+    if (swId !== modeSwitchId) return;
+    focusColor = fc;
+    focusObj = null;
+    detections = [];
+    objColors = [];
+    detectionsDirty = true;
+  }
+
   async function runDetectionFrame(skipCheck) {
     if (!video || !useCamera || !overlay || detecting || tabHidden) { return; }
+    if (!$objectDetectionEnabled) { detectFrameOnly(skipCheck); return; }
     if (!skipCheck) {
       skipFrameCounter++;
       if (skipFrameCounter % 3 !== 0) return;
@@ -502,7 +518,8 @@
       }
       if (swId !== modeSwitchId) { detecting = false; return; }
 
-      results = results.filter(d => d.score >= 0.3);
+      const minScore = $perfMode === 'quality' ? 0.4 : $perfMode === 'performance' ? 0.2 : 0.3;
+      results = results.filter(d => d.score >= minScore);
       results.sort((a, b) => b.score - a.score);
       const raw = results.slice(0, 15);
       const cw = overlay.width, ch = overlay.height;
@@ -804,7 +821,7 @@
           allResults = await detectMobileNet(frame, mk).catch(() => []);
         }
         if (myId !== undefined && myId !== detectId) return;
-        let results = allResults.filter(d => d.score >= 0.3);
+        let results = allResults.filter(d => d.score >= ($perfMode === 'quality' ? 0.4 : $perfMode === 'performance' ? 0.2 : 0.3));
         results.sort((a, b) => b.score - a.score);
         detections = results;
 

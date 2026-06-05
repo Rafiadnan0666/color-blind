@@ -4,15 +4,14 @@
   import { goto } from '$app/navigation';
   import { session, user, isAuthLoading, initializeAuthStores } from '$lib/stores/auth';
   import BottomNav from '$lib/components/BottomNav.svelte';
-  import { notifications, setUserId, userProfile } from '$lib/supabase/db';
+  import { notifications, setUserId, userProfile, userSettings } from '$lib/supabase/db';
   import { onMount } from 'svelte';
+  import { rawSettings, rawProfile, voiceEnabled, notifEnabled, theme, highContrast, avatarUrl, profileName } from '$lib/stores/settings';
 
   let { children, data } = $props();
 
   let navOpen = $state(false);
   let unreadCount = $state(0);
-  let avatarUrl = $state('');
-  let profileName = $state('');
   let avatarError = $state(false);
 
   $effect(() => {
@@ -28,7 +27,24 @@
     if ($user?.id) {
       setUserId($user.id);
       loadUnreadCount();
-      userProfile.get().then(p => { if (p?.avatarurl) avatarUrl = p.avatarurl; if (p?.name) profileName = p.name; }).catch(() => {});
+      userProfile.get().then(p => { rawProfile.set(p); }).catch(() => {});
+      userSettings.get().then(s => {
+        rawSettings.set(s);
+      }).catch(() => {});
+    }
+  });
+
+  $effect(() => {
+    const t = $theme;
+    const hc = $highContrast;
+    if (typeof document !== 'undefined') {
+      const cl = document.documentElement.classList;
+      ['theme-light','theme-dark','theme-system','theme-high-contrast','high-contrast'].forEach(c => cl.remove(c));
+      if (t === 'dark') cl.add('theme-dark');
+      else if (t === 'light') cl.add('theme-light');
+      else if (t === 'high-contrast') { cl.add('theme-high-contrast'); cl.add('high-contrast'); }
+      else cl.add('theme-system');
+      if (hc) cl.add('high-contrast');
     }
   });
 
@@ -79,15 +95,15 @@
             </a>
             <span class="w-px h-6 bg-neo-black"></span>
             <div class="flex items-center gap-2 ml-2">
-            {#if avatarUrl && !avatarError}
-              <img src={avatarUrl} alt="" class="nav-avatar" onerror={() => avatarError = true} />
+            {#if $avatarUrl && !avatarError}
+              <img src={$avatarUrl} alt="" class="nav-avatar" onerror={() => avatarError = true} />
             {:else}
               <div class="brut-avatar w-8 h-8 text-brut-sm">
                 {($user?.email ?? '?')[0].toUpperCase()}
               </div>
             {/if}
             <span class="font-brut text-brut-xs uppercase max-w-[120px] truncate">
-              {profileName || $user?.email || ''}
+              {$profileName || $user?.email || ''}
             </span>
             <button onclick={handleSignOut} class="brut-btn text-sm px-3 py-1.5">
               Logout
@@ -108,15 +124,15 @@
             <div class="brut-spinner mx-auto"></div>
           {:else if $session}
             <div class="flex items-center gap-3 mb-2 pb-2 border-b-brut border-neo-black">
-              {#if avatarUrl && !avatarError}
-                <img src={avatarUrl} alt="" class="nav-avatar" onerror={() => avatarError = true} />
+              {#if $avatarUrl && !avatarError}
+                <img src={$avatarUrl} alt="" class="nav-avatar" onerror={() => avatarError = true} />
               {:else}
                 <div class="brut-avatar">
                   {($user?.email ?? '?')[0].toUpperCase()}
                 </div>
               {/if}
               <div class="font-brut text-brut-xs uppercase truncate">
-                {profileName || $user?.email || ''}
+                {$profileName || $user?.email || ''}
               </div>
             </div>
             <a href="/detects" class="brut-nav-link" class:brut-nav-link-active={isActive('/detects')}>
