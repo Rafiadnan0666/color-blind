@@ -39,7 +39,7 @@ async function classifyWithModel(source) {
     imgTensor.dispose();
     resized.dispose();
     if (!model) return { scene: 'unknown', confidence: 0 };
-    const predictions =  (model.predict(batched));
+    const predictions = model.predict(batched);
     const scores = await predictions.data();
     const scoreArray = Array.from(scores);
     const maxIdx = scoreArray.indexOf(Math.max(...scoreArray));
@@ -83,7 +83,7 @@ function heuristicClassify(source) {
   } else {
     return { scene: 'unknown', confidence: 0 };
   }
-  const ctx =  (canvas.getContext('2d'));
+  const ctx = canvas.getContext('2d');
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data;
   let totalGreen = 0;

@@ -180,7 +180,7 @@ function findClosestNamedColor(r, g, b) {
 }
 export function getColorBlindConfusion(r, g, b) {
   const { h, s, v } = rgbToHsv(r, g, b);
-  const alerts =  ([]);
+  const alerts = [];
   if (s < 0.15 || v < 0.1) return alerts;
   if ((h < 25 || h > 335) && s > 0.25 && v > 0.2) {
     alerts.push({ type: 'protanopia', label: 'Red-blind: may appear dark/brown' });

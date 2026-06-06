@@ -13,11 +13,10 @@ export async function notifyScanComplete(objectCount, engineMode) {
   const titles = {
     fusion: 'Multi-Engine Scan Complete',
     coco: 'COCO Scan Complete',
-    ssdlens: 'Fruit Detection Complete',
-    traffic_light: 'Traffic Light Scan Complete',
+    ssdlens: 'Object Detection Complete',
     currency: 'Currency Scan Complete',
-    medicine: 'Medicine Detection Complete',
-    local_products: 'Product Scan Complete',
+    drug: 'Drug Detection Complete',
+    traffic_light: 'Traffic Light Scan Complete',
     accessibility: 'Accessibility Scan Complete',
   };
   await createNotification(

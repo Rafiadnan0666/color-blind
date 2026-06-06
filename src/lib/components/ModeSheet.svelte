@@ -7,10 +7,9 @@
     { id: 'fusion', icon: 'fa-compress-alt', label: 'Fusion', desc: 'All engines combined' },
     { id: 'coco', icon: 'fa-globe', label: 'COCO', desc: '90-class general objects' },
     { id: 'ssdlens', icon: 'fa-apple-alt', label: 'Objects', desc: 'General object detection' },
-    { id: 'traffic_light', icon: 'fa-traffic-light', label: 'Traffic', desc: 'Red, green, yellow' },
     { id: 'currency', icon: 'fa-money-bill-wave', label: 'Currency', desc: '7 rupiah notes' },
-    { id: 'medicine', icon: 'fa-pills', label: 'Medicine', desc: '4 pill types' },
-    { id: 'local_products', icon: 'fa-shopping-basket', label: 'Products', desc: '44 retail items' },
+    { id: 'drug', icon: 'fa-pills', label: 'Drug', desc: 'Drug detection' },
+    { id: 'traffic_light', icon: 'fa-traffic-light', label: 'Traffic', desc: 'Red, green, yellow' },
     { id: 'accessibility', icon: 'fa-universal-access', label: 'Access', desc: 'Road signs' },
   ];
 
@@ -19,10 +18,9 @@
       fusion: '#ff3366',
       coco: '#00e5ff',
       ssdlens: '#39ff14',
-      traffic_light: '#ff0033',
       currency: '#ffd700',
-      medicine: '#ff6b35',
-      local_products: '#ffd700',
+      drug: '#ff6b35',
+      traffic_light: '#ff0033',
       accessibility: '#00e5ff',
     };
     return colors[modeId] || '#ffd700';

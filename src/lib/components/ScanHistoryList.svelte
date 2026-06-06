@@ -66,7 +66,7 @@
   }
 
   function getModeIcon(mode) {
-    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', ssdlens: 'fa-apple-alt', traffic_light: 'fa-traffic-light', currency: 'fa-money-bill-wave', medicine: 'fa-pills', local_products: 'fa-shopping-basket', accessibility: 'fa-universal-access' };
+    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', ssdlens: 'fa-apple-alt', currency: 'fa-money-bill-wave', drug: 'fa-pills', traffic_light: 'fa-traffic-light', accessibility: 'fa-universal-access' };
     return icons[mode] || 'fa-cube';
   }
 </script>

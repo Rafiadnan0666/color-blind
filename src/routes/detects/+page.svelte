@@ -11,7 +11,8 @@
   import { session, user } from '$lib/stores/auth';
   import { notifyScanComplete, notifyColorSaved, notifyFavoriteSaved } from '$lib/supabase/notifications';
   import { speakColor, speakObject } from '$lib/utils/voice';
-  import { perfMode, objectDetectionEnabled, colorDetectionEnabled, realtimeDetection } from '$lib/stores/settings';
+  import { perfMode, objectDetectionEnabled, colorDetectionEnabled, realtimeDetection } from '$lib/stores/settings';
+
   let video = $state(null);
   let overlay = $state(null);
   let status = $state('');
@@ -20,7 +21,8 @@
   let detections = $state([]);
   let focusColor = $state(null);
   let focusObj = $state(null);
-  let sceneInfo = $state(null);
+  let sceneInfo = $state(null);
+
   let prevDets = [];
   let animId = null;
   let detectTimer = null;
@@ -33,8 +35,8 @@
   let modeSwitchId = 0;
 
   let fusionRotationIndex = 0;
-  const allModels = ['fusion', 'coco', 'ssdlens', 'medicine'];
-  const mobilenetModels = ['medicine', 'traffic_light', 'currency', 'local_products', 'accessibility'];
+  const allModels = ['fusion', 'coco', 'ssdlens', 'drug', 'currency', 'accessibility', 'traffic_light'];
+  const mobilenetModels = ['accessibility', 'currency', 'drug', 'traffic_light'];
   const tfModels = ['coco', 'ssdlens'];
   const fusionModels = ['coco', ...mobilenetModels];
   let cachedFrameCanvas = null;
@@ -49,6 +51,7 @@
   let showSimulation = $state(false);
 
   let showModeSheet = $state(false);
+  let highlightActive = $state(false);
   let savedToHistory = $state(false);
   let saving = $state(false);
   let savedIds = $state(new Set());
@@ -57,6 +60,15 @@
   let statusToastMsg = $state('');
   let statusToastType = $state('success');
   let loadProgress = $state(0);
+
+  let uploadedImages = $state([]);
+  let currentImageIdx = $state(-1);
+  let imageResults = new Map();
+  let batchProcessing = $state(false);
+  let batchTotal = $state(0);
+  let batchCurrent = $state(0);
+  let batchFileName = $state('');
+  let batchCancelled = false;
   let loadStage = $state('');
   let wasDetecting = $state(false);
   let skipFrameCounter = 0;
@@ -74,7 +86,8 @@
     });
   }
 
-  const LOAD_STAGES = ['Initializing camera...', 'Loading detection models...', 'Loading MobileNetV2 model...', 'Warming up...', 'Ready'];
+  const LOAD_STAGES = ['Initializing camera...', 'Loading detection models...', 'Loading MobileNetV2 model...', 'Warming up...', 'Ready'];
+
   $effect(() => {
     if (status === 'Start') { loadProgress = 15; loadStage = LOAD_STAGES[0]; }
     else if (status === 'Load') { loadProgress = 40; loadStage = LOAD_STAGES[1]; }
@@ -83,17 +96,18 @@
       loadProgress = 100; loadStage = LOAD_STAGES[4];
       setTimeout(() => { loadProgress = 0; loadStage = ''; }, 600);
     }
-  });
+  });
+
   function getEngineLabel(mode) {
-    const labels = { fusion: 'Fusion', coco: 'COCO', ssdlens: 'Objects', medicine: 'Medicine', traffic_light: 'Traffic', currency: 'Currency', local_products: 'Products', accessibility: 'Access' };
+    const labels = { fusion: 'Fusion', coco: 'COCO', ssdlens: 'Objects', drug: 'Drug', currency: 'Currency', accessibility: 'Access', traffic_light: 'Traffic' };
     return labels[mode] || mode;
   }
   function getEngineIcon(mode) {
-    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', ssdlens: 'fa-apple-alt', medicine: 'fa-pills', traffic_light: 'fa-traffic-light', currency: 'fa-money-bill-wave', local_products: 'fa-shopping-basket', accessibility: 'fa-universal-access' };
+    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', ssdlens: 'fa-apple-alt', drug: 'fa-pills', currency: 'fa-money-bill-wave', accessibility: 'fa-universal-access', traffic_light: 'fa-traffic-light' };
     return icons[mode] || 'fa-cube';
   }
   function getEngineColor(mode) {
-    const colors = { fusion: '#ff3366', coco: '#00e5ff', ssdlens: '#39ff14', medicine: '#ff6b35', traffic_light: '#ff0033', currency: '#ffd700', local_products: '#ff8c00', accessibility: '#00e5ff' };
+    const colors = { fusion: '#ff3366', coco: '#00e5ff', ssdlens: '#39ff14', drug: '#ff6b35', currency: '#ffd700', accessibility: '#00e5ff', traffic_light: '#ff0033' };
     return colors[mode] || '#ffd700';
   }
 
@@ -103,7 +117,9 @@
 
   async function switchMode(m) {
     if (m === engineMode) return;
+    if (batchProcessing) { toast('Wait for current batch to finish', 'error'); return; }
     modeSwitchId++;
+    saveCurrentResultsToMap();
     engineMode = m;
     savedToHistory = false;
     detections = [];
@@ -129,7 +145,7 @@
       animId = requestAnimationFrame(drawLoop);
     } else if (imageSrc) {
       detectId++;
-      runDetect(detectId);
+      runDetect(detectId, currentImageIdx);
     }
   }
 
@@ -168,7 +184,8 @@
     overlay.style.height = Math.round(h) + 'px';
     overlay.style.left = Math.round((vr.width - w) / 2) + 'px';
     overlay.style.top = Math.round((vr.height - h) / 2) + 'px';
-  }
+  }
+
   onMount(() => {
     srcCanvas = document.createElement('canvas');
     if (useCamera) init();
@@ -218,6 +235,7 @@
         }
       }
       try { await notifyScanComplete(objColors.length, engineMode); } catch (_) {}
+      saveCurrentResultsToMap();
       toast('Scan saved to history!', 'success');
     } catch (e) {
       console.warn('Could not save scan history:', e);
@@ -239,6 +257,7 @@
         notes: `Color: ${detection.color.name}${paletteStr ? ' | Palette: ' + paletteStr : ''} | Mode: ${engineMode} | Conf: ${(detection.score * 100).toFixed(0)}%`,
       });
       try { await notifyFavoriteSaved(detection.label); } catch (_) {}
+      saveCurrentResultsToMap();
       toast(`"${detection.label}" saved!`, 'success');
     } catch (e) {
       console.warn('Could not save favorite:', e);
@@ -255,6 +274,7 @@
         rgbValue: `${color.r},${color.g},${color.b}`,
       });
       try { await notifyColorSaved(color.name, color.hex); } catch (_) {}
+      saveCurrentResultsToMap();
       toast(`"${color.name}" saved!`, 'success');
     } catch (e) {
       console.warn('Could not save color:', e);
@@ -269,6 +289,7 @@
     try {
       const notes = `Color: ${d.color.name} ${d.color.hex} | Mode: ${engineMode} | Conf: ${(d.score * 100).toFixed(0)}%`;
       await savedObjects.create({ objectName: d.label, notes });
+      saveCurrentResultsToMap();
       toast(`"${d.label}" object saved!`, 'success');
     } catch (e) {
       console.warn('Could not save object:', e);
@@ -429,6 +450,7 @@
   async function analyzeObjPalette(source, det) {
     if (analyzingObj) return;
     analyzingObj = true;
+    saveCurrentResultsToMap();
     try {
       const cvs = document.createElement('canvas');
       let ctx;
@@ -537,13 +559,6 @@
       if (swId !== modeSwitchId) { detecting = false; return; }
       objColors = colored;
 
-      for (const d of colored) {
-        if (d.label && !savedObjIds.has(d.label)) {
-          savedObjIds = new Set([...savedObjIds, d.label]);
-          savedObjects.create({ objectName: d.label, notes: `Color: ${d.color.name} ${d.color.hex} | Conf: ${(d.score * 100).toFixed(0)}%` }).catch(() => {});
-        }
-      }
-
       const best = pickNearestCenter(sm, cw, ch);
       if (best) {
         const fc = sampleRegionColor(video, best.x1, best.y1, best.width, best.height);
@@ -600,6 +615,60 @@
       if (s > bestScore) { bestScore = s; best = d; }
     }
     return best;
+  }
+
+  function drawMagnifier(ctx, pos, radius = 60, zoom = 3) {
+    const src = useCamera ? video : srcCanvas;
+    if (!src || !pos) return;
+    const srcR = radius / zoom;
+    const sx = Math.max(0, pos.x - srcR);
+    const sy = Math.max(0, pos.y - srcR);
+    const srcW = src.videoWidth || src.width || 0;
+    const srcH = src.videoHeight || src.height || 0;
+    const sw = Math.min(srcW - sx, srcR * 2);
+    const sh = Math.min(srcH - sy, srcR * 2);
+    if (sw < 1 || sh < 1) return;
+
+    ctx.save();
+    ctx.shadowBlur = 24;
+    ctx.shadowColor = 'rgba(255,215,0,0.45)';
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, radius + 4, 0, Math.PI * 2);
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, radius - 1, 0, Math.PI * 2);
+    ctx.clip();
+
+    ctx.drawImage(src, sx, sy, sw, sh, pos.x - radius, pos.y - radius, radius * 2, radius * 2);
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 0.5;
+    for (let i = 1; i < 4; i++) {
+      const gx = pos.x - radius + (radius * 2 / 4) * i;
+      ctx.beginPath(); ctx.moveTo(gx, pos.y - radius); ctx.lineTo(gx, pos.y + radius); ctx.stroke();
+      const gy = pos.y - radius + (radius * 2 / 4) * i;
+      ctx.beginPath(); ctx.moveTo(pos.x - radius, gy); ctx.lineTo(pos.x + radius, gy); ctx.stroke();
+    }
+
+    ctx.strokeStyle = '#ff0033';
+    ctx.lineWidth = 2.5;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = 'rgba(255,0,51,0.6)';
+    ctx.beginPath();
+    ctx.moveTo(pos.x - 10, pos.y); ctx.lineTo(pos.x + 10, pos.y);
+    ctx.moveTo(pos.x, pos.y - 10); ctx.lineTo(pos.x, pos.y + 10);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
   }
 
   function roundRect(ctx, x, y, w, h, r) {
@@ -764,29 +833,105 @@
         ctx.fillText(ft, ftx + 6, fty + 15);
         ctx.restore();
       }
+      if (scenePalette.length > 0) {
+        for (const pc of scenePalette) {
+          if (!pc.positions || !pc.positions[0]) continue;
+          const pos = pc.positions[0];
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, 3, 0, Math.PI * 2);
+          ctx.fillStyle = pc.hex;
+          ctx.shadowBlur = 6;
+          ctx.shadowColor = pc.hex + '88';
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+      if (highlightActive && _focusColor?.samplePos) {
+        drawMagnifier(ctx, _focusColor.samplePos);
+      }
     } catch (e) { console.error('drawFrame error:', e); }
   }
 
   let detectId = 0;
 
   function handleUpload(e) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const maxSize = 20 * 1024 * 1024;
-    if (f.size > maxSize) { toast('Image too large — max 20MB', 'error'); return; }
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/tiff'];
-    if (!validTypes.includes(f.type)) { toast('Unsupported file type. Use JPEG, PNG, or WebP.', 'error'); return; }
-    detections = []; objColors = []; selectedObj = null; showObjPalette = false; focusColor = null; focusObj = null; savedToHistory = false; scenePalette = [];
-    detectId++;
-    const myId = detectId;
-    const r = new FileReader();
-    r.onload = async (ev) => { if (myId !== detectId) return; imageSrc = ev.target?.result; await tick(); runDetect(myId); };
-    r.readAsDataURL(f);
+    const files = Array.from(e.target.files || []);
+    processFiles(files).catch(e => { console.error('Upload error:', e); toast('Error processing files', 'error'); });
+    e.target.value = '';
   }
 
-  async function runDetect(myId) {
+  async function processFiles(files) {
+    if (!files.length) return;
+    const maxSize = 20 * 1024 * 1024;
+    const maxTotal = 50;
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/tiff'];
+    let remaining = maxTotal - uploadedImages.length;
+    if (remaining <= 0) { toast(`Max ${maxTotal} images reached`, 'error'); return; }
+    const valid = files.filter(f => {
+      if (f.size > maxSize) { toast(`"${f.name}" too large — max 20MB`, 'error'); return false; }
+      if (!validTypes.includes(f.type)) { toast(`"${f.name}" unsupported type`, 'error'); return false; }
+      return true;
+    }).slice(0, remaining);
+    if (!valid.length) return;
+    if (valid.length < files.length) { toast(`Processing ${valid.length} of ${files.length} (max ${maxTotal})`, 'info'); }
+    saveCurrentResultsToMap();
+    batchProcessing = true;
+    batchCancelled = false;
+    batchTotal = valid.length;
+    batchCurrent = 0;
+    const total = valid.length;
+    status = `Processing ${total} image${total > 1 ? 's' : ''}...`;
+    for (let fi = 0; fi < total; fi++) {
+      if (batchCancelled) { toast('Batch cancelled', 'info'); break; }
+      batchCurrent = fi + 1;
+      const f = valid[fi];
+      batchFileName = f.name;
+      const imgId = Date.now() + '-' + Math.random().toString(36).slice(2, 8) + '-' + fi;
+      const src = await new Promise((resolve) => {
+        const r = new FileReader();
+        r.onload = (ev) => resolve(ev.target?.result);
+        r.onerror = () => resolve(null);
+        r.readAsDataURL(f);
+      });
+      if (!src) { toast(`Failed to read "${f.name}"`, 'error'); continue; }
+      const entry = { id: imgId, src, name: f.name, size: f.size };
+      const newIdx = uploadedImages.length;
+      imageResults.set(imgId, { src, detections: [], objColors: [], focusColor: null, focusObj: null, sceneInfo: null, scenePalette: [], objPalettes: {}, objContours: {}, selectedObj: null, showObjPalette: false, objPalette: [], savedToHistory: false, savedIds: new Set(), savedObjIds: new Set(), modelLoadErrors: [] });
+      uploadedImages = [...uploadedImages, entry];
+      switchToImage(newIdx);
+      await runDetectForImage(newIdx);
+    }
+    batchProcessing = false;
+    status = '';
+    if (!batchCancelled) toast(`Processed ${total} image${total > 1 ? 's' : ''}`, 'success');
+  }
+
+  async function runDetectForImage(idx) {
+    if (idx < 0 || idx >= uploadedImages.length) return;
+    const entry = uploadedImages[idx];
+    if (!entry?.src) return;
+    saveCurrentResultsToMap();
+    currentImageIdx = idx;
+    imageSrc = entry.src;
+    detections = []; objColors = []; selectedObj = null; showObjPalette = false;
+    focusColor = null; focusObj = null; savedToHistory = false; scenePalette = [];
+    sceneInfo = null; objPalettes = {}; objContours = {};
+    await tick();
+    detectId++;
+    const myId = detectId;
+    await runDetect(myId, idx);
+  }
+
+  async function runDetect(myId, imageIdx) {
     if (!imageSrc) return;
     const img = new Image();
+    return new Promise((resolve) => {
+    img.onerror = () => { toast('Failed to load image', 'error'); status = ''; resolve(); };
     img.onload = async () => {
       if (myId !== undefined && myId !== detectId) return;
       try {
@@ -1004,12 +1149,114 @@
               ctx.fillText(ft, ftx + 6, fty + 16);
               ctx.restore();
             }
+            if (scenePalette.length > 0) {
+              for (const pc of scenePalette) {
+                if (!pc.positions || !pc.positions[0]) continue;
+                const pos = pc.positions[0];
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 3, 0, Math.PI * 2);
+                ctx.fillStyle = pc.hex;
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = pc.hex + 'aa';
+                ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+                ctx.restore();
+              }
+            }
+            if (highlightActive && focusColor?.samplePos) {
+              drawMagnifier(ctx, focusColor.samplePos);
+            }
           } catch (e) { console.error('upload draw error:', e); }
         }
         status = '';
-      } catch (e) { status = e?.message || 'Error'; console.error(e); }
+        if (imageIdx !== undefined && imageIdx >= 0 && imageIdx < uploadedImages.length) {
+          const imgId = uploadedImages[imageIdx].id;
+          imageResults.set(imgId, {
+            src: imageSrc, detections: [...detections], objColors: [...objColors],
+            focusColor, focusObj, sceneInfo, scenePalette: [...scenePalette],
+            objPalettes: { ...objPalettes }, objContours: { ...objContours },
+            selectedObj, showObjPalette, objPalette: [...objPalette],
+            savedToHistory, savedIds: new Set(savedIds), savedObjIds: new Set(savedObjIds),
+            modelLoadErrors: [...modelLoadErrors],
+          });
+        }
+        resolve();
+      } catch (e) { status = e?.message || 'Error'; console.error(e); resolve(); }
     };
     img.src = imageSrc;
+    });
+  }
+
+  function saveCurrentResultsToMap() {
+    if (currentImageIdx < 0 || currentImageIdx >= uploadedImages.length) return;
+    const id = uploadedImages[currentImageIdx].id;
+    imageResults.set(id, {
+      src: imageSrc, detections, objColors, focusColor, focusObj,
+      sceneInfo, scenePalette, objPalettes: { ...objPalettes },
+      objContours: { ...objContours },
+      selectedObj, showObjPalette, objPalette: [...objPalette],
+      savedToHistory, savedIds: new Set(savedIds), savedObjIds: new Set(savedObjIds),
+      modelLoadErrors: [...modelLoadErrors],
+    });
+  }
+
+  function loadResultsFromMap(idx) {
+    if (idx < 0 || idx >= uploadedImages.length) return;
+    const id = uploadedImages[idx].id;
+    const r = imageResults.get(id);
+    if (!r) return;
+    imageSrc = r.src; detections = r.detections; objColors = r.objColors;
+    focusColor = r.focusColor; focusObj = r.focusObj; sceneInfo = r.sceneInfo;
+    scenePalette = r.scenePalette; objPalettes = r.objPalettes;
+    objContours = r.objContours; selectedObj = r.selectedObj;
+    showObjPalette = r.showObjPalette; objPalette = r.objPalette;
+    savedToHistory = r.savedToHistory;
+    savedIds = new Set(r.savedIds); savedObjIds = new Set(r.savedObjIds);
+    modelLoadErrors = [...(r.modelLoadErrors || [])];
+  }
+
+  function switchToImage(idx) {
+    if (idx === currentImageIdx) return;
+    if (idx < 0 || idx >= uploadedImages.length) return;
+    saveCurrentResultsToMap();
+    currentImageIdx = idx;
+    loadResultsFromMap(idx);
+    if (overlay) {
+      const octx = overlay.getContext('2d');
+      if (octx) octx.clearRect(0, 0, overlay.width, overlay.height);
+    }
+    if (uploadedImages[idx]?.src) {
+      const img = new Image();
+      img.onload = () => {
+        if (overlay) { overlay.width = img.naturalWidth; overlay.height = img.naturalHeight; }
+        if (srcCanvas) { srcCanvas.width = img.naturalWidth; srcCanvas.height = img.naturalHeight; }
+      };
+      img.onerror = () => { toast('Failed to load image', 'error'); };
+      img.src = uploadedImages[idx].src;
+    }
+  }
+
+  function removeImage(idx) {
+    if (idx < 0 || idx >= uploadedImages.length) return;
+    const id = uploadedImages[idx].id;
+    imageResults.delete(id);
+    uploadedImages = uploadedImages.filter((_, i) => i !== idx);
+    if (uploadedImages.length === 0) {
+      currentImageIdx = -1;
+      imageSrc = null; detections = []; objColors = []; focusColor = null; focusObj = null;
+      sceneInfo = null; scenePalette = []; objPalettes = {}; objContours = {};
+      selectedObj = null; showObjPalette = false; objPalette = [];
+      savedToHistory = false; savedIds = new Set(); savedObjIds = new Set();
+      modelLoadErrors = [];
+      if (overlay) { const octx = overlay.getContext('2d'); if (octx) octx.clearRect(0, 0, overlay.width, overlay.height); }
+    } else {
+      const newIdx = Math.min(idx, uploadedImages.length - 1);
+      switchToImage(newIdx);
+    }
   }
 
   function selectObject(d) {
@@ -1020,7 +1267,9 @@
   }
 
   async function toggleCam() {
+    if (batchProcessing) { toast('Wait for current batch to finish', 'error'); return; }
     modeSwitchId++;
+    saveCurrentResultsToMap();
     useCamera = !useCamera;
     imageSrc = null; detections = []; objColors = []; focusColor = null; focusObj = null;
     selectedObj = null; showObjPalette = false; savedToHistory = false;
@@ -1033,6 +1282,9 @@
     if (overlay) { const ctx = overlay.getContext('2d'); if (ctx) ctx.clearRect(0, 0, overlay.width, overlay.height); }
     if (useCamera) { await tick(); init(); }
     else {
+      if (uploadedImages.length > 0) {
+        switchToImage(uploadedImages.length - 1);
+      }
       const toLoad = [];
       if (engineMode === 'fusion') {
         toLoad.push(loadTFModel());
@@ -1050,35 +1302,40 @@
 
   function handleDrop(e) {
     e.preventDefault();
-    const f = e.dataTransfer?.files?.[0];
-    if (f) {
-      const maxSize = 20 * 1024 * 1024;
-      if (f.size > maxSize) { toast('Image too large — max 20MB', 'error'); return; }
-      const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/tiff'];
-      if (!validTypes.includes(f.type)) { toast('Unsupported file type', 'error'); return; }
-      detections = []; objColors = []; selectedObj = null; showObjPalette = false; focusColor = null; focusObj = null; savedToHistory = false; scenePalette = [];
-      detectId++;
-      const myId = detectId;
-      const r = new FileReader();
-      r.onload = async (ev) => { if (myId !== detectId) return; imageSrc = ev.target?.result; await tick(); runDetect(myId); };
-      r.readAsDataURL(f);
-    }
+    const files = Array.from(e.dataTransfer?.files || []);
+    processFiles(files).catch(e => { console.error('Drop error:', e); toast('Error processing dropped files', 'error'); });
   }
 </script>
 
 <div class="detect-page" class:camera-mode={useCamera} role="region" aria-label="Detection view" ondragover={(e) => e.preventDefault()} ondrop={handleDrop}>
-  {#if status || loadProgress > 0}
+  {#if status || loadProgress > 0 || batchProcessing}
     <div class="loading-overlay">
       <div class="loading-card">
-        {#if loadStage}
+        {#if batchProcessing}
+          <div class="font-brut text-brut-sm uppercase mb-3">Processing {batchCurrent} of {batchTotal}</div>
+          {#if batchFileName}
+            <div class="text-brut-xs text-neo-darkgray truncate max-w-full mb-2" title={batchFileName}>{batchFileName}</div>
+          {/if}
+          <div class="progress-track">
+            <div class="progress-fill" style="width: {(batchCurrent / batchTotal) * 100}%"></div>
+          </div>
+          <div class="font-brut text-brut-xs text-neo-darkgray mt-2">{((batchCurrent / batchTotal) * 100).toFixed(0)}%</div>
+          <button class="brut-btn-danger mt-3 text-brut-xs" onclick={() => { batchCancelled = true; }} aria-label="Cancel batch">
+            <i class="fas fa-times mr-1"></i> Cancel
+          </button>
+        {:else if loadStage}
           <div class="font-brut text-brut-sm uppercase mb-3">{loadStage}</div>
+          <div class="progress-track">
+            <div class="progress-fill" style="width: {loadProgress}%"></div>
+          </div>
+          <div class="font-brut text-brut-xs text-neo-darkgray mt-2">{loadProgress}%</div>
         {:else}
           <div class="font-brut text-brut-sm uppercase mb-3">{status || 'Loading...'}</div>
+          <div class="progress-track">
+            <div class="progress-fill" style="width: {loadProgress}%"></div>
+          </div>
+          <div class="font-brut text-brut-xs text-neo-darkgray mt-2">{loadProgress}%</div>
         {/if}
-        <div class="progress-track">
-          <div class="progress-fill" style="width: {loadProgress}%"></div>
-        </div>
-        <div class="font-brut text-brut-xs text-neo-darkgray mt-2">{loadProgress}%</div>
       </div>
     </div>
   {/if}
@@ -1155,9 +1412,10 @@
               <div class="cam-color-tag">
                 <i class="fas fa-palette mr-1"></i> Color Indicator
               </div>
-              <div class="cam-color-card" style="border-color: {focusColor.hex}">
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div class="cam-color-card" style="border-color: {focusColor.hex}" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false}>
                 <div class="flex items-center gap-2 w-full">
-                  <div class="swatch-lg" style="background: {focusColor.hex}; box-shadow: 0 0 12px {focusColor.hex}66"></div>
+                  <div class="swatch-lg" style="background: {focusColor.hex}; box-shadow: 0 0 12px {focusColor.hex}66" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false}></div>
                   <div class="flex-1 min-w-0">
                     <div class="font-brut text-brut-sm capitalize">{focusColor.name}</div>
                     <div class="text-brut-xs text-neo-darkgray">{focusColor.hex} {#if focusColor.r !== undefined}({focusColor.r},{focusColor.g},{focusColor.b}){/if}</div>
@@ -1259,6 +1517,9 @@
         <div class="toolbar-row">
           <button class="tool-btn" onclick={toggleCam} aria-label="Use camera"><i class="fas fa-camera"></i></button>
           <button class="tool-btn active" aria-label="Upload image"><i class="fas fa-upload"></i></button>
+          {#if uploadedImages.length > 0}
+            <button class="tool-btn" onclick={() => document.getElementById('file-input').click()} aria-label="Add more images"><i class="fas fa-plus"></i></button>
+          {/if}
           <button class="mode-selector" style="--mode-color: {getEngineColor(engineMode)}" onclick={() => showModeSheet = true}>
             <i class="fas {getEngineIcon(engineMode)}"></i>
             <span>{getEngineLabel(engineMode)}</span>
@@ -1278,29 +1539,54 @@
           {#each modelLoadErrors as err}
             <div class="model-err-banner">{err}</div>
           {/each}
+          {#if uploadedImages.length > 1}
+            <div class="upload-thumbnails">
+              <button class="thumb-scroll thumb-prev" onclick={() => switchToImage(currentImageIdx - 1)} disabled={currentImageIdx <= 0} aria-label="Previous image"><i class="fas fa-chevron-left"></i></button>
+              <div class="thumb-strip">
+                {#each uploadedImages as img, i}
+                  <div class="thumb-wrap" class:active={i === currentImageIdx}>
+                    <button class="thumb-btn" onclick={() => switchToImage(i)} aria-label="{img.name}">
+                      <img src={img.src} alt={img.name} class="thumb-img">
+                    </button>
+                    <button class="thumb-remove" onclick={() => removeImage(i)} aria-label="Remove {img.name}"><i class="fas fa-times"></i></button>
+                    {#if imageResults.get(img.id)?.detections?.length}
+                      <span class="thumb-badge">{imageResults.get(img.id).detections.length}</span>
+                    {/if}
+                  </div>
+                {/each}
+              </div>
+              <button class="thumb-scroll thumb-next" onclick={() => switchToImage(currentImageIdx + 1)} disabled={currentImageIdx >= uploadedImages.length - 1} aria-label="Next image"><i class="fas fa-chevron-right"></i></button>
+            </div>
+          {/if}
         {:else}
           <div class="upload-zone" role="button" tabindex="0" onclick={() => document.getElementById('file-input').click()} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') document.getElementById('file-input').click(); }}>
             <div class="text-center">
               <div class="text-5xl opacity-30 mb-3"><i class="fas fa-image"></i></div>
-              <div class="font-brut text-brut-lg uppercase">Drop an image</div>
-              <div class="text-brut-xs text-neo-darkgray">or click to browse</div>
-              <label class="brut-btn-primary mt-4 inline-block cursor-pointer">
-                <i class="fas fa-folder-open mr-2"></i> Select Image
-                <input id="file-input" type="file" accept="image/*" onchange={handleUpload} hidden>
-              </label>
+              <div class="font-brut text-brut-lg uppercase">Drop images here</div>
+              <div class="text-brut-xs text-neo-darkgray">or click to browse (multiple allowed)</div>
+              {#if uploadedImages.length > 0}
+                <button class="brut-btn-primary mt-4 inline-block cursor-pointer">
+                  <i class="fas fa-plus mr-2"></i> Add More
+                </button>
+              {:else}
+                <button class="brut-btn-primary mt-4 inline-block cursor-pointer">
+                  <i class="fas fa-folder-open mr-2"></i> Select Images
+                </button>
+              {/if}
             </div>
           </div>
         {/if}
       </div>
+      <input id="file-input" type="file" accept="image/*" multiple onchange={handleUpload} class="hidden-input">
 
       {#if focusColor && imageSrc}
         <div class="upload-color-section" transition:fly={{ y: 8, duration: 200 }}>
           <div class="color-indicator-tag">
             <i class="fas fa-palette mr-1"></i> Color Indicator
           </div>
-          <div class="upload-color-card" style="border-color: {focusColor.hex}">
+          <div class="upload-color-card" style="border-color: {focusColor.hex}" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false}>
             <div class="flex items-center gap-3 w-full">
-              <div class="swatch-xl" style="background: {focusColor.hex}; box-shadow: 0 0 16px {focusColor.hex}88"></div>
+              <div class="swatch-xl" style="background: {focusColor.hex}; box-shadow: 0 0 16px {focusColor.hex}88" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false}></div>
               <div class="flex-1 min-w-0">
                 <div class="font-brut text-brut capitalize">{focusColor.name}</div>
                 <div class="text-brut-xs text-neo-darkgray font-mono">{focusColor.hex}</div>
@@ -1463,9 +1749,9 @@
               <div class="desk-color-tag">
                 <i class="fas fa-palette mr-1"></i> Color Indicator
               </div>
-              <div class="desk-color-card" style="border-color: {focusColor.hex}">
+              <div class="desk-color-card" style="border-color: {focusColor.hex}" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false}>
               <div class="desk-color-header">
-                <div class="swatch-lg" style="background: {focusColor.hex}; box-shadow: 0 0 12px {focusColor.hex}66"></div>
+                <div class="swatch-lg" style="background: {focusColor.hex}; box-shadow: 0 0 12px {focusColor.hex}66" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false}></div>
                 <div class="flex-1 min-w-0">
                   <div class="font-brut text-brut-sm capitalize">{focusColor.name}</div>
                   <div class="text-brut-xs text-neo-darkgray">{focusColor.hex} {#if focusColor.r !== undefined}({focusColor.r},{focusColor.g},{focusColor.b}){/if}</div>
@@ -1749,6 +2035,36 @@
   video, .img { width: 100%; display: block; }
   .viewfinder canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
 
+  .upload-thumbnails { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0; background: #fefefe; border: 2px solid #0a0a0a; box-shadow: 3px 3px 0 #0a0a0a; margin-top: 0.4rem; }
+  .thumb-strip { display: flex; gap: 0.35rem; overflow-x: auto; flex: 1; scrollbar-width: thin; padding: 0.2rem 0; }
+  .thumb-wrap { position: relative; flex-shrink: 0; }
+  .thumb-wrap.active .thumb-btn { border-color: #ffd700; box-shadow: 0 0 0 2px #ffd700; }
+  .thumb-btn { width: 52px; height: 52px; border: 3px solid #0a0a0a; padding: 0; cursor: pointer; overflow: hidden; background: #0a0a0a; transition: all 0.15s; display: block; }
+  .thumb-btn:hover { transform: scale(1.05); }
+  .thumb-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb-remove {
+    position: absolute; top: -6px; right: -6px; width: 18px; height: 18px;
+    border: 2px solid #0a0a0a; background: #ff0033; color: #fff;
+    cursor: pointer; font-size: 0.45rem; display: flex; align-items: center; justify-content: center;
+    line-height: 1; padding: 0; z-index: 2; transition: all 0.15s;
+  }
+  .thumb-remove:hover { transform: scale(1.2); }
+  .thumb-badge {
+    position: absolute; bottom: -5px; right: -5px; width: 18px; height: 18px;
+    border: 2px solid #0a0a0a; background: #39ff14; color: #0a0a0a;
+    font: 700 0.45rem/1 'Space Grotesk', system-ui, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .thumb-scroll {
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    border: 2px solid #0a0a0a; background: #fefefe; cursor: pointer; font-size: 0.65rem; flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .thumb-scroll:disabled { opacity: 0.3; cursor: default; }
+  .thumb-scroll:hover:not(:disabled) { background: #ffd700; }
+
+  .hidden-input { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
   .upload-zone {
     display: flex; align-items: center; justify-content: center; min-height: 280px;
     border: 4px dashed #0a0a0a; box-shadow: 6px 6px 0 #0a0a0a; padding: 2rem; cursor: pointer; transition: all 0.2s;
@@ -1773,6 +2089,8 @@
   .save-btn:hover { background: #ffd700; transform: translate(-1px,-1px); box-shadow: 3px 3px 0 #0a0a0a; }
   .save-btn:disabled { opacity: 0.5; cursor: default; }
   .save-btn.saved { background: #39ff14; box-shadow: 1px 1px 0 #0a0a0a; transform: translate(1px,1px); }
+  .brut-btn-danger { padding: 0.35rem 0.75rem; border: 2px solid #0a0a0a; background: #ff0033; color: #fff; font-weight: 700; cursor: pointer; text-transform: uppercase; letter-spacing: 0.03em; transition: all 0.15s; box-shadow: 2px 2px 0 #0a0a0a; }
+  .brut-btn-danger:hover { background: #cc0029; transform: translate(-1px,-1px); box-shadow: 3px 3px 0 #0a0a0a; }
   .detections-list { display: flex; flex-direction: column; gap: 0.25rem; max-height: 320px; overflow-y: auto; scrollbar-width: thin; }
   .detection-item {
     display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.5rem;

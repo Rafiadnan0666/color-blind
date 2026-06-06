@@ -18,6 +18,10 @@
   let selectedLang = $state('eng');
   let ocrWorker = $state(null);
   let processingQueue = $state(false);
+  let detailItem = $state(null);
+
+  function openDetail(item) { detailItem = item; }
+  function closeDetail() { detailItem = null; }
 
   const LANGUAGES = [
     { value: 'eng', label: 'English' },
@@ -354,14 +358,14 @@
     {:else}
       <div class="history-list">
         {#each history as item (item.id)}
-          <div class="history-item" transition:fly={{ y: 6, duration: 150 }}>
+          <div class="history-item" onclick={() => openDetail(item)} role="button" tabindex="0" onkeydown={(e) => { if (e.key === 'Enter') openDetail(item); }}>
             <div class="history-text">{(item.extractedtext || '').slice(0, 100)}{#if (item.extractedtext || '').length > 100}...{/if}</div>
             <div class="history-meta">
               <span class="text-brut-xs text-neo-darkgray">{formatDate(item.createdat)}</span>
               {#if item.language}
                 <span class="lang-pill">{item.language}</span>
               {/if}
-              <button class="delete-btn" onclick={() => removeHistory(item.id)} aria-label="Delete"><i class="fas fa-trash-can"></i></button>
+              <button class="delete-btn" onclick={(e) => { e.stopPropagation(); removeHistory(item.id); }} aria-label="Delete"><i class="fas fa-trash-can"></i></button>
             </div>
           </div>
         {/each}
@@ -369,6 +373,29 @@
     {/if}
   </div>
 </div>
+
+{#if detailItem}
+  <div class="modal-overlay" onclick={closeDetail} role="presentation">
+    <div class="modal-card" onclick={(e) => e.stopPropagation()} role="dialog" aria-label="OCR detail">
+      <button class="modal-close" onclick={closeDetail}><i class="fas fa-times"></i></button>
+      <div class="modal-body">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="modal-icon"><i class="fas fa-file-lines text-neo-pink"></i></div>
+          <div class="font-brut text-brut-sm uppercase flex-1">Extracted Text</div>
+          {#if detailItem.language}
+            <span class="lang-pill">{detailItem.language}</span>
+          {/if}
+        </div>
+        <div class="modal-content">{detailItem.extractedtext || '(No text)'}</div>
+        <div class="modal-row"><span class="font-brut text-brut-xs uppercase">Created</span><span class="text-brut-xs">{new Date(detailItem.createdat).toLocaleDateString()}</span></div>
+        <div class="flex gap-2 mt-3">
+          <button class="brut-btn-primary text-brut-xs px-4 py-2 flex-1" onclick={() => { navigator.clipboard.writeText(detailItem.extractedtext || ''); }}><i class="fas fa-copy mr-1"></i> Copy</button>
+          <button class="brut-btn-danger text-brut-xs px-3 py-2" onclick={() => { removeHistory(detailItem.id); closeDetail(); }}><i class="fas fa-trash-can"></i></button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .ocr-page { max-width: 600px; margin: 1rem auto; padding: 0 0.75rem 5rem; display: flex; flex-direction: column; gap: 0.75rem; }
@@ -402,13 +429,21 @@
   .ocr-text { font-family: 'Space Grotesk', monospace; font-size: 0.75rem; padding: 0.75rem; margin: 0; white-space: pre-wrap; word-break: break-word; max-height: 350px; overflow-y: auto; background: #fefefe; line-height: 1.4; }
   .empty-state { display: flex; flex-direction: column; align-items: center; padding: 2rem 1rem; color: #888; text-align: center; }
   .history-list { display: flex; flex-direction: column; gap: 0.25rem; max-height: 300px; overflow-y: auto; }
-  .history-item { padding: 0.6rem 0.5rem; border: 2px solid transparent; transition: all 0.15s; background: #fefefe; }
+  .history-item { padding: 0.6rem 0.5rem; border: 2px solid transparent; transition: all 0.15s; background: #fefefe; cursor: pointer; }
   .history-item:hover { border-color: #0a0a0a; background: #ffd70008; }
   .history-text { font-size: 0.7rem; line-height: 1.35; margin-bottom: 0.3rem; color: #0a0a0a; }
   .history-meta { display: flex; align-items: center; justify-content: space-between; gap: 0.35rem; }
   .delete-btn { border: none; background: none; cursor: pointer; color: #ff0033; opacity: 0.5; font-size: 0.7rem; padding: 4px; transition: all 0.15s; }
   .delete-btn:hover { opacity: 1; transform: scale(1.1); }
-  
+  .modal-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.5); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+  .modal-card { background: #fefefe; border: 3px solid #0a0a0a; box-shadow: 6px 6px 0 #0a0a0a; width: 100%; max-width: 420px; position: relative; }
+  .modal-close { position: absolute; top: 6px; right: 6px; width: 30px; height: 30px; border: 2px solid #0a0a0a; background: #ff0033; color: #fff; cursor: pointer; font-size: 0.75rem; z-index: 1; display: flex; align-items: center; justify-content: center; }
+  .modal-body { padding: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
+  .modal-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+  .modal-icon { width: 36px; height: 36px; border: 3px solid #0a0a0a; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1rem; background: #ffd70022; }
+  .modal-content { padding: 0.5rem; border: 2px solid #0a0a0a; background: #f5f5f5; font-size: 0.7rem; line-height: 1.5; max-height: 250px; overflow-y: auto; white-space: pre-wrap; word-break: break-word; font-family: 'Space Grotesk', monospace; }
+  .brut-btn-danger { display: inline-flex; align-items: center; justify-content: center; background: #ff0033; color: #fff; border: 3px solid #0a0a0a; box-shadow: 3px 3px 0 #0a0a0a; font: 700 0.65rem/1 'Space Grotesk', system-ui, sans-serif; padding: 0.5rem 0.8rem; cursor: pointer; transition: all 0.15s; }
+  .brut-btn-danger:hover { background: #ff3355; transform: translate(-1px,-1px); box-shadow: 4px 4px 0 #0a0a0a; }
   .brut-input {
     padding: 0.4rem 0.6rem; border: 2px solid #0a0a0a; background: #fefefe;
     font: 400 0.7rem 'Space Grotesk', system-ui, sans-serif;

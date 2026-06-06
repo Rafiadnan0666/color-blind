@@ -42,6 +42,18 @@
     editNotes = '';
   }
 
+  function extractColorFromNotes(notes) {
+    if (!notes) return null;
+    const m = notes.match(/#[0-9a-fA-F]{6}/);
+    return m ? m[0] : null;
+  }
+
+  function extractNameFromNotes(notes) {
+    if (!notes) return null;
+    const m = notes.match(/Color:\s*([^#]+)/);
+    return m ? m[1].trim() : null;
+  }
+
   async function saveEdit(item) {
     try {
       await savedObjects.update(item.id, { objectName: editName || item.objectname, notes: editNotes });
@@ -78,8 +90,13 @@
     {:else}
       <div class="objects-list">
         {#each items as item (item.id)}
+          {@const colorHex = extractColorFromNotes(item.notes)}
           <div class="object-item" transition:fly={{ y: 6, duration: 150 }} onclick={() => openDetail(item)} role="button" tabindex="0" onkeydown={(e) => { if (e.key === 'Enter') openDetail(item); }}>
-            <div class="obj-icon"><i class="fas fa-cube"></i></div>
+            {#if colorHex}
+              <div class="obj-swatch" style="background:{colorHex}"></div>
+            {:else}
+              <div class="obj-icon"><i class="fas fa-cube"></i></div>
+            {/if}
             <div class="obj-info">
               {#if editId === item.id}
                 <input type="text" class="edit-input" bind:value={editName} placeholder="Object name" onkeydown={(e) => { if (e.key === 'Enter') saveEdit(item); if (e.key === 'Escape') cancelEdit(); }}>
@@ -119,6 +136,15 @@
         {#if detailItem.notes}
           <div class="modal-notes">{detailItem.notes}</div>
         {/if}
+        {#if extractColorFromNotes(detailItem.notes)}
+          {@const c = extractColorFromNotes(detailItem.notes)}
+          <div class="modal-row"><span class="font-brut text-brut-xs uppercase">Color</span>
+            <div class="flex items-center gap-1.5">
+              <span class="color-swatch-detail" style="background:{c}"></span>
+              <span class="font-mono text-brut-sm">{c}</span>
+            </div>
+          </div>
+        {/if}
         <div class="modal-row"><span class="font-brut text-brut-xs uppercase">Mode</span><span class="text-brut-xs">{detailItem.mode || '—'}</span></div>
         {#if detailItem.confidence !== null && detailItem.confidence !== undefined}
           <div class="modal-row"><span class="font-brut text-brut-xs uppercase">Confidence</span><span class="text-brut-xs">{(detailItem.confidence * 100).toFixed(0)}%</span></div>
@@ -144,6 +170,8 @@
   .object-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem; border: 2px solid transparent; transition: all 0.15s; }
   .object-item:hover { border-color: #0a0a0a; background: #ffd70008; }
   .obj-icon { width: 36px; height: 36px; border: 3px solid #0a0a0a; background: #ffd70022; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .obj-swatch { width: 36px; height: 36px; border: 3px solid #0a0a0a; flex-shrink: 0; box-shadow: 0 0 8px currentColor; }
+  .color-swatch-detail { width: 20px; height: 20px; border: 2px solid #0a0a0a; flex-shrink: 0; }
   .obj-info { flex: 1; min-width: 0; }
   .obj-meta { display: flex; align-items: center; gap: 0.5rem; }
   .delete-btn { border: none; background: none; cursor: pointer; color: #ff0033; opacity: 0.5; font-size: 0.75rem; padding: 4px; }

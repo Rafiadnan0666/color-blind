@@ -6,64 +6,42 @@ function hashColor(str) {
   return `hsl(${Math.abs(hash) % 360}, 70%, 55%)`;
 }
 const DISPLAY_NAMES = {
-  traffic_light_red: 'Red Light', traffic_light_green: 'Green Light', traffic_light_yellow: 'Yellow Light',
   rp1000: 'Rp 1.000', rp2000: 'Rp 2.000', rp5000: 'Rp 5.000', rp10000: 'Rp 10.000',
   rp20000: 'Rp 20.000', rp50000: 'Rp 50.000', rp100000: 'Rp 100.000',
-  paracetamol: 'Paracetamol', panadol: 'Panadol', amoxicillin: 'Amoxicillin', vitamin_c: 'Vitamin C',
-  '5 star': '5 Star', ALL_OUT_COIL: 'All Out Coil', ALL_OUT_REFILL: 'All Out Refill',
-  'Aashirwaad atta': 'Aashirwaad Atta', 'Amul Butter': 'Amul Butter',
-  Beardo: 'Beardo', Bisleri: 'Bisleri', Boost: 'Boost', Bournvita: 'Bournvita', Bru: 'Bru',
-  'Cream and Onion Lays': 'Cream & Onion Lays', Dettol: 'Dettol',
-  'Fortune Bottle': 'Fortune Bottle', 'Fortune Can': 'Fortune Can', 'Fortune Pouch': 'Fortune Pouch',
-  'Fortune atta': 'Fortune Atta', 'Harpic Bathroom Cleaner': 'Harpic Bathroom', 'Harpic Toilet Cleaner': 'Harpic Toilet',
-  Horlicks: 'Horlicks', Kikat: 'KitKat', Kinley: 'Kinley', KrackJack: 'KrackJack',
-  Limea: 'Limea', Maggie: 'Maggi', 'Marie Gold': 'Marie Gold',
-  Mirinda: 'Mirinda', Nestle: 'Nestlé', 'Odonil Green': 'Odonil Green', 'Odonil Purple': 'Odonil Purple',
-  'Odonil Red': 'Odonil Red', 'Rin Bar': 'Rin Bar', 'Salted Lays': 'Salted Lays',
-  Santoor: 'Santoor', 'Spicy Masala Lays': 'Spicy Masala Lays', Sprite: 'Sprite',
-  Stayfree: 'Stayfree', 'Thumbs-Up': 'Thumbs Up', 'Tomato Lays': 'Tomato Lays',
-  'Vim Bar': 'Vim Bar', Whisper: 'Whisper', WildStone: 'WildStone', Yippee: 'Yippee',
-  munch: 'Munch', 'parle-G': 'Parle-G',
+  drug: 'Drug',
+  traffic_light_red: 'Red Light', traffic_light_green: 'Green Light', traffic_light_yellow: 'Yellow Light',
   crosswalk: 'Crosswalk', speedlimit: 'Speed Limit', stop: 'Stop Sign', trafficlight: 'Traffic Light',
 };
 const MODELS = {
-  traffic_light: {
-    path: '/model_onnx/traffic_light_yolov8n.onnx',
-    classes: ['traffic_light_red', 'traffic_light_green', 'traffic_light_yellow'],
-    colors: { traffic_light_red: '#ff0033', traffic_light_green: '#00cc44', traffic_light_yellow: '#ffcc00' },
-  },
-  currency: {
-    path: '/model_onnx/currency_yolov8n.onnx',
-    classes: ['rp1000', 'rp2000', 'rp5000', 'rp10000', 'rp20000', 'rp50000', 'rp100000'],
-    colors: { rp1000: '#8B4513', rp2000: '#2E8B57', rp5000: '#4169E1', rp10000: '#8B008B', rp20000: '#006400', rp50000: '#B22222', rp100000: '#FF4500' },
-  },
-  medicine: {
-    path: '/model_onnx/medicine_yolov8n.onnx',
-    classes: ['paracetamol', 'panadol', 'amoxicillin', 'vitamin_c'],
-    colors: { paracetamol: '#87CEEB', panadol: '#FFB6C1', amoxicillin: '#98FB98', vitamin_c: '#FFD700' },
-  },
-  local_products: {
-    path: '/model_onnx/local_products_yolov8n.onnx',
-    classes: [
-      '5 star', 'ALL_OUT_COIL', 'ALL_OUT_REFILL', 'Aashirwaad atta', 'Amul Butter',
-      'Beardo', 'Bisleri', 'Boost', 'Bournvita', 'Bru',
-      'Cream and Onion Lays', 'Dettol', 'Fortune Bottle', 'Fortune Can', 'Fortune Pouch',
-      'Fortune atta', 'Harpic Bathroom Cleaner', 'Harpic Toilet Cleaner', 'Horlicks', 'Kikat',
-      'Kinley', 'KrackJack', 'Limea', 'Maggie', 'Marie Gold',
-      'Mirinda', 'Nestle', 'Odonil Green', 'Odonil Purple', 'Odonil Red',
-      'Rin Bar', 'Salted Lays', 'Santoor', 'Spicy Masala Lays', 'Sprite',
-      'Stayfree', 'Thumbs-Up', 'Tomato Lays', 'Vim Bar', 'Whisper',
-      'WildStone', 'Yippee', 'munch', 'parle-G',
-    ],
-    colors: {},
-  },
   accessibility: {
-    path: '/model_onnx/accessibility_yolov8n.onnx',
+    path: '/models/accessibility_640.onnx',
     classes: ['crosswalk', 'speedlimit', 'stop', 'trafficlight'],
+    inputSize: 640,
+    isClassifier: false,
     colors: { stop: '#ff0033', trafficlight: '#ffcc00', crosswalk: '#00ccff', speedlimit: '#ff9900' },
   },
+  currency: {
+    path: '/models/currency_cls_224.onnx',
+    classes: ['rp1000', 'rp2000', 'rp5000', 'rp10000', 'rp20000', 'rp50000', 'rp100000'],
+    inputSize: 224,
+    isClassifier: true,
+    colors: { rp1000: '#8B4513', rp2000: '#2E8B57', rp5000: '#4169E1', rp10000: '#8B008B', rp20000: '#006400', rp50000: '#B22222', rp100000: '#FF4500' },
+  },
+  drug: {
+    path: '/models/drug_detection_640.onnx',
+    classes: ['drug'],
+    inputSize: 640,
+    isClassifier: false,
+    colors: { drug: '#ff6b35' },
+  },
+  traffic_light: {
+    path: '/models/traffic_light_640.onnx',
+    classes: ['traffic_light_red', 'traffic_light_green', 'traffic_light_yellow'],
+    inputSize: 640,
+    isClassifier: false,
+    colors: { traffic_light_red: '#ff0033', traffic_light_green: '#00cc44', traffic_light_yellow: '#ffcc00' },
+  },
 };
-const INPUT_SIZE = 640;
 const CONF_THRESHOLD = 0.25;
 const IOU_THRESHOLD = 0.45;
 let sessions = {};
@@ -72,11 +50,14 @@ let _origW = 0, _origH = 0;
 let _scaleX = 1, _scaleY = 1;
 let _padX = 0, _padY = 0;
 let preprocessCanvas = null;
-export async function loadYoloModel(modelKey = 'traffic_light') {
+function getModelCfg(modelKey) {
+  return MODELS[modelKey];
+}
+export async function loadYoloModel(modelKey = 'accessibility') {
   if (loadAttempted[modelKey]) return;
   loadAttempted[modelKey] = true;
-  const cfg = MODELS[modelKey];
-  if (!cfg) return;
+  const cfg = getModelCfg(modelKey);
+  if (!cfg) { console.warn(`YOLO[${modelKey}]: unknown model`); return; }
   try {
     sessions[modelKey] = await ort.InferenceSession.create(cfg.path, {
       executionProviders: ['wasm', 'webgl'],
@@ -90,50 +71,80 @@ export async function loadAllYoloModels() {
   await Promise.allSettled(Object.keys(MODELS).map(k => loadYoloModel(k)));
 }
 function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
-function preprocess(source) {
+function softmax(arr) {
+  const max = Math.max(...arr);
+  const exps = arr.map(v => Math.exp(v - max));
+  const sum = exps.reduce((a, b) => a + b, 0);
+  return exps.map(v => v / sum);
+}
+function captureSource(source) {
   if (!preprocessCanvas) preprocessCanvas = document.createElement('canvas');
   const cvs = preprocessCanvas;
-  let srcW, srcH, tempCtx;
+  let srcW, srcH;
   if (source instanceof HTMLVideoElement) {
     cvs.width = source.videoWidth; cvs.height = source.videoHeight;
-    tempCtx = cvs.getContext('2d');
-    tempCtx.drawImage(source, 0, 0);
+    cvs.getContext('2d').drawImage(source, 0, 0);
     srcW = cvs.width; srcH = cvs.height;
   } else if (source instanceof HTMLCanvasElement) {
-    tempCtx = source.getContext('2d');
-    srcW = source.width; srcH = source.height;
+    cvs.width = source.width; cvs.height = source.height;
+    cvs.getContext('2d').drawImage(source, 0, 0);
+    srcW = cvs.width; srcH = cvs.height;
   } else if (source instanceof HTMLImageElement) {
     cvs.width = source.naturalWidth; cvs.height = source.naturalHeight;
-    tempCtx = cvs.getContext('2d');
-    tempCtx.drawImage(source, 0, 0);
+    cvs.getContext('2d').drawImage(source, 0, 0);
     srcW = cvs.width; srcH = cvs.height;
   } else {
     throw new Error('Unsupported source');
   }
+  return { cvs, srcW, srcH };
+}
+function preprocessDetect(source, inputSize) {
+  const { cvs, srcW, srcH } = captureSource(source);
   _origW = srcW; _origH = srcH;
-  _scaleX = Math.min(INPUT_SIZE / srcW, INPUT_SIZE / srcH);
+  _scaleX = Math.min(inputSize / srcW, inputSize / srcH);
   const newW = Math.round(srcW * _scaleX);
   const newH = Math.round(srcH * _scaleX);
   const resized = document.createElement('canvas');
-  resized.width = INPUT_SIZE; resized.height = INPUT_SIZE;
+  resized.width = inputSize; resized.height = inputSize;
   const rctx = resized.getContext('2d');
   rctx.fillStyle = '#727272';
-  rctx.fillRect(0, 0, INPUT_SIZE, INPUT_SIZE);
-  _padX = Math.round((INPUT_SIZE - newW) / 2);
-  _padY = Math.round((INPUT_SIZE - newH) / 2);
+  rctx.fillRect(0, 0, inputSize, inputSize);
+  _padX = Math.round((inputSize - newW) / 2);
+  _padY = Math.round((inputSize - newH) / 2);
   rctx.drawImage(cvs, 0, 0, srcW, srcH, _padX, _padY, newW, newH);
-  const imgData = rctx.getImageData(0, 0, INPUT_SIZE, INPUT_SIZE);
+  const imgData = rctx.getImageData(0, 0, inputSize, inputSize);
   const pixels = imgData.data;
-  const float32Data = new Float32Array(3 * INPUT_SIZE * INPUT_SIZE);
-  for (let i = 0; i < INPUT_SIZE * INPUT_SIZE; i++) {
+  const float32Data = new Float32Array(3 * inputSize * inputSize);
+  for (let i = 0; i < inputSize * inputSize; i++) {
     const si = i * 4;
     float32Data[i] = pixels[si] / 255;
-    float32Data[INPUT_SIZE * INPUT_SIZE + i] = pixels[si + 1] / 255;
-    float32Data[2 * INPUT_SIZE * INPUT_SIZE + i] = pixels[si + 2] / 255;
+    float32Data[inputSize * inputSize + i] = pixels[si + 1] / 255;
+    float32Data[2 * inputSize * inputSize + i] = pixels[si + 2] / 255;
   }
-  return new ort.Tensor('float32', float32Data, [1, 3, INPUT_SIZE, INPUT_SIZE]);
+  return new ort.Tensor('float32', float32Data, [1, 3, inputSize, inputSize]);
 }
-function decodeDetections(output, classNames) {
+function preprocessClassify(source, inputSize) {
+  const { cvs, srcW, srcH } = captureSource(source);
+  _origW = srcW; _origH = srcH;
+  const size = Math.min(srcW, srcH);
+  const ox = Math.round((srcW - size) / 2);
+  const oy = Math.round((srcH - size) / 2);
+  const resized = document.createElement('canvas');
+  resized.width = inputSize; resized.height = inputSize;
+  const rctx = resized.getContext('2d');
+  rctx.drawImage(cvs, ox, oy, size, size, 0, 0, inputSize, inputSize);
+  const imgData = rctx.getImageData(0, 0, inputSize, inputSize);
+  const pixels = imgData.data;
+  const float32Data = new Float32Array(3 * inputSize * inputSize);
+  for (let i = 0; i < inputSize * inputSize; i++) {
+    const si = i * 4;
+    float32Data[i] = pixels[si] / 255;
+    float32Data[inputSize * inputSize + i] = pixels[si + 1] / 255;
+    float32Data[2 * inputSize * inputSize + i] = pixels[si + 2] / 255;
+  }
+  return new ort.Tensor('float32', float32Data, [1, 3, inputSize, inputSize]);
+}
+function decodeDetections(output, classNames, inputSize) {
   const numClasses = classNames.length;
   const data = output.data;
   const dims = output.dims;
@@ -191,19 +202,51 @@ function iou(a, b) {
   const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
   return inter / ((a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - inter + 1e-6);
 }
-export async function detectYolo(source, modelKey = 'traffic_light') {
+export async function detectYolo(source, modelKey = 'accessibility') {
   if (!sessions[modelKey]) { console.warn(`YOLO[${modelKey}]: session not loaded`); return []; }
+  const cfg = getModelCfg(modelKey);
+  if (!cfg) { console.warn(`YOLO[${modelKey}]: unknown model config`); return []; }
   const session = sessions[modelKey];
-  const t = preprocess(source);
+  if (cfg.isClassifier) {
+    return classifyImage(source, modelKey, cfg, session);
+  }
+  const t = preprocessDetect(source, cfg.inputSize);
   const feeds = { [session.inputNames[0]]: t };
   const results = await session.run(feeds);
   const output = results[session.outputNames[0]];
-  const classNames = MODELS[modelKey].classes;
-  const dets = decodeDetections(output, classNames);
+  const dets = decodeDetections(output, cfg.classes, cfg.inputSize);
   for (const d of dets) {
     d.label = DISPLAY_NAMES[d.label] || d.label;
   }
   return dets;
+}
+async function classifyImage(source, modelKey, cfg, session) {
+  const t = preprocessClassify(source, cfg.inputSize);
+  const feeds = { [session.inputNames[0]]: t };
+  const results = await session.run(feeds);
+  const output = results[session.outputNames[0]];
+  const probs = softmax(Array.from(output.data));
+  const bestIdx = probs.indexOf(Math.max(...probs));
+  const score = probs[bestIdx];
+  const label = cfg.classes[bestIdx];
+  if (score < 0.2) return [];
+  const size = Math.min(_origW, _origH);
+  const ox = Math.round((_origW - size) / 2);
+  const oy = Math.round((_origH - size) / 2);
+  const margin = 0.1;
+  return [{
+    x1: ox + size * margin,
+    y1: oy + size * margin,
+    x2: ox + size * (1 - margin),
+    y2: oy + size * (1 - margin),
+    width: size * (1 - 2 * margin),
+    height: size * (1 - 2 * margin),
+    score,
+    classId: bestIdx,
+    label: DISPLAY_NAMES[label] || label,
+    model: 'yolo',
+    isClassifier: true,
+  }];
 }
 export function getYoloColor(label) {
   for (const cfg of Object.values(MODELS)) {
@@ -219,4 +262,8 @@ export function getYoloColor(label) {
 }
 export function getYoloModelKeys() {
   return Object.keys(MODELS);
+}
+export function isClassifierModel(modelKey) {
+  const cfg = getModelCfg(modelKey);
+  return cfg ? cfg.isClassifier : false;
 }
