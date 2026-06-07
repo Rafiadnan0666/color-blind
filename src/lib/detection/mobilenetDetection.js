@@ -9,7 +9,7 @@ const MODELS = {
     useYolo: true,
   },
   currency: {
-    path: '/models/currency_cls_224.onnx',
+    path: '/models/currency_detection_640.onnx',
     classes: ['rp1000', 'rp2000', 'rp5000', 'rp10000', 'rp20000', 'rp50000', 'rp100000'],
     colors: { rp1000: '#8B4513', rp2000: '#2E8B57', rp5000: '#4169E1', rp10000: '#8B008B', rp20000: '#006400', rp50000: '#B22222', rp100000: '#FF4500' },
     displayNames: { rp1000: 'Rp 1.000', rp2000: 'Rp 2.000', rp5000: 'Rp 5.000', rp10000: 'Rp 10.000', rp20000: 'Rp 20.000', rp50000: 'Rp 50.000', rp100000: 'Rp 100.000' },
@@ -17,9 +17,9 @@ const MODELS = {
   },
   drug: {
     path: '/models/drug_detection_640.onnx',
-    classes: ['drug'],
-    colors: { drug: '#ff6b35' },
-    displayNames: { drug: 'Drug' },
+    classes: ['paracetamol', 'panadol', 'amoxicillin', 'vitamin_c'],
+    colors: { paracetamol: '#00ccff', panadol: '#ff6b35', amoxicillin: '#39ff14', vitamin_c: '#ffd700' },
+    displayNames: { paracetamol: 'Paracetamol', panadol: 'Panadol', amoxicillin: 'Amoxicillin', vitamin_c: 'Vitamin C' },
     useYolo: true,
   },
   traffic_light: {

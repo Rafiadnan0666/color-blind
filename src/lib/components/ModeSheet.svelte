@@ -8,7 +8,7 @@
     { id: 'coco', icon: 'fa-globe', label: 'COCO', desc: '90-class general objects' },
     { id: 'ssdlens', icon: 'fa-apple-alt', label: 'Objects', desc: 'General object detection' },
     { id: 'currency', icon: 'fa-money-bill-wave', label: 'Currency', desc: '7 rupiah notes' },
-    { id: 'drug', icon: 'fa-pills', label: 'Drug', desc: 'Drug detection' },
+    { id: 'drug', icon: 'fa-pills', label: 'Medicine', desc: 'Medicine detection (paracetamol, panadol, amoxicillin, vitamin C)' },
     { id: 'traffic_light', icon: 'fa-traffic-light', label: 'Traffic', desc: 'Red, green, yellow' },
     { id: 'accessibility', icon: 'fa-universal-access', label: 'Access', desc: 'Road signs' },
     { id: 'meat', icon: 'fa-drumstick-bite', label: 'Meat', desc: 'Meat freshness' },

@@ -4,7 +4,7 @@ AI-powered browser application for color blindness detection, object recognition
 
 ## Features
 
-- **9 Detection Modes**: Fusion (all models simultaneously), COCO-SSD, SSD Lens, Currency (7 Indonesian rupiah denominations), Drug Detection, Traffic Light Detection, Accessibility Signs (crosswalk/stop/speedlimit/trafficlight), Meat Freshness (Fresh/Half-Fresh/Spoiled), Mushroom Toxicity (5 poisonous species)
+- **9 Detection Modes**: Fusion (all models simultaneously), COCO-SSD, SSD Lens, Currency (7 Indonesian rupiah denominations), Medicine Detection (paracetamol, panadol, amoxicillin, vitamin C), Traffic Light Detection, Accessibility Signs (crosswalk/stop/speedlimit/trafficlight), Meat Freshness (Fresh/Half-Fresh/Spoiled), Mushroom Toxicity (5 poisonous species)
 - **Color Analysis**: 125+ named colors, hex/RGB/HSV/HSL, palette extraction with spatial positions, CVD simulation (protanopia/deuteranopia/tritanopia)
 - **Color Picker**: Click on camera or uploaded image to sample color; live cursor preview; modal with save option
 - **OCR Scanner**: Text extraction via Tesseract.js with copy and history
@@ -24,14 +24,14 @@ AI-powered browser application for color blindness detection, object recognition
 
 ### ONNX Runtime Web (WASM)
 
-| Mode | Input | Classes |
-|------|-------|---------|
-| Currency | 224×224 | Rp 1.000, Rp 2.000, Rp 5.000, Rp 10.000, Rp 20.000, Rp 50.000, Rp 100.000 |
-| Drug | 640×640 | Drug |
-| Traffic Light | 640×640 | Red Light, Green Light, Yellow Light |
-| Accessibility | 640×640 | Crosswalk, Speed Limit, Stop Sign, Traffic Light |
-| Meat Freshness | 224×224 | Fresh, Half-Fresh, Spoiled |
-| Mushroom | 224×224 | Autumn Skullcap, Death Cap, Destroying Angels, False Morel, Poison Fire Coral |
+| Mode | Input | Backbone | Classes |
+|------|-------|----------|---------|
+| Currency | 640×640 | YOLOv8n | Rp 1.000, Rp 2.000, Rp 5.000, Rp 10.000, Rp 20.000, Rp 50.000, Rp 100.000 |
+| Medicine | 640×640 | YOLOv8n | Paracetamol, Panadol, Amoxicillin, Vitamin C |
+| Traffic Light | 640×640 | YOLOv8n | Red Light, Green Light, Yellow Light |
+| Accessibility | 640×640 | YOLOv8n | Crosswalk, Speed Limit, Stop Sign, Traffic Light |
+| Meat Freshness | 224×224 | MobileNetV3 | Fresh, Half-Fresh, Spoiled |
+| Mushroom | 224×224 | MobileNetV3 | Autumn Skullcap, Death Cap, Destroying Angels, False Morel, Poison Fire Coral |
 
 ### TensorFlow.js
 

@@ -130,11 +130,11 @@
   });
 
   function getEngineLabel(mode) {
-    const labels = { fusion: 'Fusion', coco: 'COCO', ssdlens: 'Objects', drug: 'Drug', currency: 'Currency', accessibility: 'Access', traffic_light: 'Traffic', meat: 'Meat', mushroom: 'Mushroom' };
+    const labels = { fusion: 'Fusion', coco: 'COCO', ssdlens: 'Objects', drug: 'Medicine', currency: 'Currency', accessibility: 'Access', traffic_light: 'Traffic', meat: 'Meat', mushroom: 'Mushroom' };
     return labels[mode] || mode;
   }
   function getEngineIcon(mode) {
-    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', ssdlens: 'fa-apple-alt', drug: 'fa-pills', currency: 'fa-money-bill-wave', accessibility: 'fa-universal-access', traffic_light: 'fa-traffic-light', meat: 'fa-drumstick-bite', mushroom: 'fa-seedling' };
+    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', ssdlens: 'fa-apple-alt', drug: 'fa-tablets', currency: 'fa-money-bill-wave', accessibility: 'fa-universal-access', traffic_light: 'fa-traffic-light', meat: 'fa-drumstick-bite', mushroom: 'fa-seedling' };
     return icons[mode] || 'fa-cube';
   }
   function getEngineColor(mode) {
