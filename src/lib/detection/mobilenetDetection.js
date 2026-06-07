@@ -48,21 +48,24 @@ const MODELS = {
 let sessions = {};
 let loadAttempted = {};
 
-export async function loadMobileNetModel(modelKey = 'currency') {
+export async function loadMobileNetModel(modelKey = 'currency', onProgress) {
   if (loadAttempted[modelKey]) return;
   loadAttempted[modelKey] = true;
   const cfg = MODELS[modelKey];
   if (!cfg) return;
+  if (onProgress) onProgress(modelKey, 'loading');
   try {
-    await loadYoloModel(modelKey);
+    await loadYoloModel(modelKey, onProgress);
     sessions[modelKey] = { __yolo: true, modelKey };
+    if (onProgress) onProgress(modelKey, 'ready');
   } catch (e2) {
     console.error(`[MODEL_LOAD_ERROR] ONNX failed for [${modelKey}]:`, e2?.message || e2);
+    if (onProgress) onProgress(modelKey, 'error');
   }
 }
 
-export async function loadAllMobileNetModels() {
-  await Promise.allSettled(Object.keys(MODELS).map(k => loadMobileNetModel(k)));
+export async function loadAllMobileNetModels(onProgress) {
+  await Promise.allSettled(Object.keys(MODELS).map(k => loadMobileNetModel(k, onProgress)));
 }
 
 export async function detectMobileNet(source, modelKey = 'currency') {

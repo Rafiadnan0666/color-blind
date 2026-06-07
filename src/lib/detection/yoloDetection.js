@@ -67,7 +67,7 @@ let preprocessCanvas = null;
 function getModelCfg(modelKey) {
   return MODELS[modelKey];
 }
-export async function loadYoloModel(modelKey = 'accessibility') {
+export async function loadYoloModel(modelKey = 'accessibility', onProgress) {
   if (loadAttempted[modelKey]) return;
   loadAttempted[modelKey] = true;
   const cfg = getModelCfg(modelKey);
@@ -79,16 +79,19 @@ export async function loadYoloModel(modelKey = 'accessibility') {
         ort.env.wasm.wasmPaths = '/wasm/';
       }
     } catch (_) {}
+    if (onProgress) onProgress(modelKey, 'loading');
     sessions[modelKey] = await ort.InferenceSession.create(cfg.path, {
       executionProviders: ep,
       graphOptimizationLevel: 'all',
     });
+    if (onProgress) onProgress(modelKey, 'ready');
   } catch (e) {
     console.error(`[MODEL_LOAD_ERROR] YOLO[${modelKey}]:`, e?.message || e);
+    if (onProgress) onProgress(modelKey, 'error');
   }
 }
-export async function loadAllYoloModels() {
-  await Promise.allSettled(Object.keys(MODELS).map(k => loadYoloModel(k)));
+export async function loadAllYoloModels(onProgress) {
+  await Promise.allSettled(Object.keys(MODELS).map(k => loadYoloModel(k, onProgress)));
 }
 function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
 function softmax(arr) {
