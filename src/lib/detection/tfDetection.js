@@ -1,5 +1,24 @@
 import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs-backend-webgl';
+import '@tensorflow/tfjs-backend-cpu';
+
+let model = null;
+let loadAttempted = false;
+
+async function initBackend() {
+  // Try backends in order of preference
+  const backends = ['webgl', 'cpu'];
+  for (const backend of backends) {
+    try {
+      await tf.setBackend(backend);
+      await tf.ready();
+      console.log('[TF] Using backend:', tf.getBackend());
+      return;
+    } catch (e) {
+      console.warn(`[TF] Backend "${backend}" failed:`, e?.message);
+    }
+  }
+}
 
 const COCO_CLASSES = [
   'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat',
@@ -14,46 +33,28 @@ const COCO_CLASSES = [
   'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush',
 ];
 
-let model = null;
-let loadAttempted = false;
-
 export async function loadTFModel() {
   if (model) return model;
-  if (loadAttempted) {
-    if (model) return model;
-    return null;
-  }
+  if (loadAttempted) return model ?? null;
   loadAttempted = true;
   try {
-    // Try WebGL first, fall back to CPU if device not found
-    try {
-      await tf.setBackend('webgl');
-      await tf.ready();
-    } catch (webglErr) {
-      console.warn('[TF] WebGL unavailable, falling back to CPU:', webglErr?.message);
-      await tf.setBackend('cpu');
-      await tf.ready();
-    }
-
+    await initBackend();
     const cocoSsd = await import('@tensorflow-models/coco-ssd');
-    const loadWithConfig = async (config) => {
-      try {
-        return await cocoSsd.load(config);
-      } catch (e) {
-        console.warn(`[TF_MODEL] COCO-SSD config (${JSON.stringify(config)}) failed:`, e?.message);
-        return null;
-      }
-    };
-    model = await loadWithConfig({ scoreThreshold: 0.25, maxNumBoxes: 30 });
-    if (!model) model = await loadWithConfig({ scoreThreshold: 0.2, maxNumBoxes: 40 });
-    if (!model) model = await loadWithConfig({});
+    // @ts-ignore - scoreThreshold is valid at runtime but missing from types
+    model = await cocoSsd.load({ scoreThreshold: 0.25, maxNumBoxes: 30 }).catch(() => null);
+    if (!model) {
+      // @ts-ignore
+      model = await cocoSsd.load({ scoreThreshold: 0.2, maxNumBoxes: 40 }).catch(() => null);
+    }
+    if (!model) {
+      model = await cocoSsd.load({}).catch(() => null);
+    }
     return model;
   } catch (e) {
     console.error('[TF_MODEL_ERROR]', e?.message || e);
     return null;
   }
 }
-
 export async function detectTF(source) {
   if (!model) {
     await loadTFModel();
