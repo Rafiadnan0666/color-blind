@@ -56,7 +56,7 @@ const MODELS = {
     colors: { 'Autumn Skullcap': '#8B4513', 'Death Cap': '#ff0033', 'Destroying Angels': '#ffd700', 'False Morel': '#ff6b35', 'Poison Fire Coral': '#ff3366' },
   },
 };
-const CONF_THRESHOLD = 0.5;
+const CONF_THRESHOLD = 0.35;
 const IOU_THRESHOLD = 0.45;
 let sessions = {};
 let loadAttempted = {};
