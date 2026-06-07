@@ -369,7 +369,12 @@
         currentStream.getTracks().forEach(t => t.stop());
         currentStream = null;
       }
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      const stream = await navigator.mediaDevices.getUserMedia({
+  video: { facingMode: { ideal: 'environment' } },
+  audio: false
+}).catch(() =>
+  navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+);
       currentStream = stream;
       if (!video) { status = ''; return; }
       video.srcObject = stream; await video.play();
