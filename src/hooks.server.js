@@ -18,7 +18,11 @@ export const handle = async ({ event, resolve }) => {
 
   /** @type {{ session: import('@supabase/supabase-js').Session | null; user: import('@supabase/supabase-js').User | null } | null} */
   let sessionCache = null;
-
+  const response = await resolve(event);
+  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+  response.headers.set('Cross-Origin-Embedder-Policy', 'credentialless');
+  response.headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  return response;
   event.locals.safeGetSession = async () => {
     if (sessionCache) return sessionCache;
 
