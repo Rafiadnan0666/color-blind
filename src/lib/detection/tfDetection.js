@@ -25,7 +25,16 @@ export async function loadTFModel() {
   }
   loadAttempted = true;
   try {
-    await tf.ready();
+    // Try WebGL first, fall back to CPU if device not found
+    try {
+      await tf.setBackend('webgl');
+      await tf.ready();
+    } catch (webglErr) {
+      console.warn('[TF] WebGL unavailable, falling back to CPU:', webglErr?.message);
+      await tf.setBackend('cpu');
+      await tf.ready();
+    }
+
     const cocoSsd = await import('@tensorflow-models/coco-ssd');
     const loadWithConfig = async (config) => {
       try {
