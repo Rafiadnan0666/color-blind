@@ -196,14 +196,26 @@
     status = 'Load';
     const modelsToLoad = [];
     if (engineMode === 'fusion') {
-      modelsToLoad.push(loadTFModel());
-      modelsToLoad.push(loadAllMobileNetModels());
+      modelsToLoad.push(loadTFModel().catch(e => {
+      console.warn('[INIT] TF model failed, continuing without it:', e?.message);
+      return null;
+    }));
+     modelsToLoad.push(loadAllMobileNetModels().catch(e => {
+      console.warn('[INIT] MobileNet models failed:', e?.message);
+      return null;
+    }));
     } else if (tfModels.includes(engineMode)) {
-      modelsToLoad.push(loadTFModel());
+      modelsToLoad.push(loadTFModel().catch(e => {
+      console.warn('[INIT] TF model failed, continuing without it:', e?.message);
+      return null;
+    }));
     } else if (mobilenetModels.includes(engineMode)) {
       modelsToLoad.push(loadMobileNetModel(engineMode));
     } else {
-      modelsToLoad.push(loadTFModel());
+      modelsToLoad.push(loadTFModel().catch(e => {
+      console.warn('[INIT] TF model failed, continuing without it:', e?.message);
+      return null;
+    }));
     }
     await Promise.allSettled(modelsToLoad);
   }
@@ -370,11 +382,11 @@
         currentStream = null;
       }
       const stream = await navigator.mediaDevices.getUserMedia({
-  video: { facingMode: { ideal: 'environment' } },
-  audio: false
-}).catch(() =>
-  navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-);
+            video: { facingMode: { ideal: 'environment' } },
+            audio: false
+          }).catch(() =>
+            navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+          );
       currentStream = stream;
       if (!video) { status = ''; return; }
       video.srcObject = stream; await video.play();
@@ -391,18 +403,30 @@
       const modelNames = [];
       const mk = getMobileNetModelKey(engineMode);
       if (engineMode === 'fusion') {
-        modelsToLoad.push(loadTFModel());
+        modelsToLoad.push(loadTFModel().catch(e => {
+          console.warn('[INIT] TF model failed, continuing without it:', e?.message);
+          return null;
+        }));
         modelNames.push('COCO-SSD');
-        modelsToLoad.push(loadAllMobileNetModels());
+       modelsToLoad.push(loadAllMobileNetModels().catch(e => {
+        console.warn('[INIT] MobileNet models failed:', e?.message);
+        return null;
+      }));
         modelNames.push('MobileNetV2 All');
       } else if (tfModels.includes(engineMode)) {
-        modelsToLoad.push(loadTFModel());
+        modelsToLoad.push(loadTFModel().catch(e => {
+          console.warn('[INIT] TF model failed, continuing without it:', e?.message);
+          return null;
+        }));
         modelNames.push('COCO-SSD');
       } else if (mk) {
         modelsToLoad.push(loadMobileNetModel(mk));
         modelNames.push(`MobileNetV2 ${getEngineLabel(engineMode)}`);
       } else {
-        modelsToLoad.push(loadTFModel());
+        modelsToLoad.push(loadTFModel().catch(e => {
+        console.warn('[INIT] TF model failed, continuing without it:', e?.message);
+        return null;
+      }));
         modelNames.push('COCO-SSD');
       }
       const loadResults = await Promise.allSettled(modelsToLoad);
@@ -1102,14 +1126,26 @@
         status = 'Detect';
         const modelsToLoad = [];
         if (engineMode === 'fusion') {
-          modelsToLoad.push(loadTFModel());
-          modelsToLoad.push(loadAllMobileNetModels());
+          modelsToLoad.push(loadTFModel().catch(e => {
+  console.warn('[INIT] TF model failed, continuing without it:', e?.message);
+  return null;
+}));
+         modelsToLoad.push(loadAllMobileNetModels().catch(e => {
+  console.warn('[INIT] MobileNet models failed:', e?.message);
+  return null;
+}));
         } else if (tfModels.includes(engineMode)) {
-          modelsToLoad.push(loadTFModel());
+          modelsToLoad.push(loadTFModel().catch(e => {
+  console.warn('[INIT] TF model failed, continuing without it:', e?.message);
+  return null;
+}));
         } else if (mobilenetModels.includes(engineMode)) {
           modelsToLoad.push(loadMobileNetModel(engineMode));
         } else {
-          modelsToLoad.push(loadTFModel());
+          modelsToLoad.push(loadTFModel().catch(e => {
+  console.warn('[INIT] TF model failed, continuing without it:', e?.message);
+  return null;
+}));
         }
         await Promise.allSettled(modelsToLoad);
         if (myId !== undefined && myId !== detectId) return;
