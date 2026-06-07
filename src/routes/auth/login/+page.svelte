@@ -130,9 +130,9 @@
         Continue with Google
       </button>
 
-      <button onclick={handleMagicLink} class="brut-btn w-full" disabled={loading}>
+      <!-- <button onclick={handleMagicLink} class="brut-btn w-full" disabled={loading}>
         Send Magic Link
-      </button>
+      </button> -->
 
       <p class="mt-6 text-center font-brut text-brut-xs uppercase text-neo-darkgray">
         Don't have an account?
