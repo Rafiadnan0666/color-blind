@@ -164,6 +164,7 @@
     focusObj = null;
     prevDets = [];
     allFusionResults = [];
+    fusionRotationIndex = 0;
     scenePalette = [];
     colorPickerPos = null;
     stopLoop();
@@ -213,6 +214,7 @@
   let colorPreviewPos = $state(null);
   let colorPreviewHex = $state(null);
   let colorPreviewName = $state(null);
+  let crosshairPos = $state(null);
   let colorPickerResult = $state(null);
   let showColorPickerModal = $state(false);
   let loadTimeoutId = null;
@@ -593,8 +595,9 @@
 
       if (engineMode === 'fusion') {
         const now = Date.now();
-        allFusionResults = allFusionResults.filter(r => now - r.ts < 2000);
-        for (let b = 0; b < 2; b++) {
+        allFusionResults = allFusionResults.filter(r => now - r.ts < 5000);
+        const batchSize = $perfMode === 'performance' ? 2 : $perfMode === 'quality' ? 5 : 3;
+        for (let b = 0; b < batchSize; b++) {
           const modelId = fusionModels[fusionRotationIndex % fusionModels.length];
           fusionRotationIndex++;
           let batchResults;
@@ -972,6 +975,25 @@
             ctx.fillText('Protanopia Sim', hw + 8, 20);
           }
         } catch (_) {}
+      }
+      if (crosshairPos && colorPickerActive) {
+        const { x, y } = crosshairPos;
+        const len = 12, gap = 4;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x - len, y); ctx.lineTo(x - gap, y);
+        ctx.moveTo(x + gap, y); ctx.lineTo(x + len, y);
+        ctx.moveTo(x, y - len); ctx.lineTo(x, y - gap);
+        ctx.moveTo(x, y + gap); ctx.lineTo(x, y + len);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.arc(x, y, len + 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
       }
       if (highlightActive && _focusColor?.samplePos) {
         drawMagnifier(ctx, _focusColor.samplePos);
@@ -1583,10 +1605,11 @@
               class="cam-overlay-canvas"
               class:color-picking={colorPickerActive}
               onmousemove={(e) => {
-                if (!colorPickerActive || !video || !overlay) { colorPreviewPos = null; return; }
+                if (!colorPickerActive || !video || !overlay) { colorPreviewPos = null; crosshairPos = null; return; }
                 const r = overlay.getBoundingClientRect();
                 const x = (e.clientX - r.left) * (overlay.width / r.width);
                 const y = (e.clientY - r.top) * (overlay.height / r.height);
+                crosshairPos = { x, y };
                 const preview = sampleRegionColor(video, Math.max(0,x-4), Math.max(0,y-4), 8, 8);
                 if (preview) {
                   colorPreviewPos = { x: e.clientX, y: e.clientY };
@@ -1594,7 +1617,7 @@
                   colorPreviewName = preview.name;
                 }
               }}
-              onmouseleave={() => { if (colorPickerActive) colorPreviewPos = null; }}
+              onmouseleave={() => { if (colorPickerActive) { colorPreviewPos = null; crosshairPos = null; } }}
               onclick={(e) => {
                 if (!colorPickerActive || !video) return;
                 const r = overlay.getBoundingClientRect();
@@ -1607,6 +1630,7 @@
                   showColorPickerModal = true;
                   colorPickerActive = false;
                   colorPreviewPos = null;
+                  crosshairPos = null;
                 }
               }}
             ></canvas>
@@ -1767,9 +1791,9 @@
             <canvas bind:this={overlay}
               class:color-picking={colorPickerActive}
               onmousedown={(e) => { if (!imageSrc) return; const r = overlay.getBoundingClientRect(); const x = (e.clientX - r.left) * (overlay.width / r.width); const y = (e.clientY - r.top) * (overlay.height / r.height); if (colorPickerActive) return; regionSel = null; regionDrag = { x, y }; }}
-              onmousemove={(e) => { const r = overlay.getBoundingClientRect(); const x = (e.clientX - r.left) * (overlay.width / r.width); const y = (e.clientY - r.top) * (overlay.height / r.height); if (colorPickerActive && imageSrc) { const src = srcCanvas || document.querySelector('.viewfinder img'); if (src) { const preview = sampleRegionColor(src, Math.max(0,x-4), Math.max(0,y-4), 8, 8); if (preview) { colorPreviewPos = { x: e.clientX, y: e.clientY }; colorPreviewHex = preview.hex; colorPreviewName = preview.name; } } return; } if (!regionDrag) return; regionSel = { x1: Math.min(regionDrag.x, x), y1: Math.min(regionDrag.y, y), x2: Math.max(regionDrag.x, x), y2: Math.max(regionDrag.y, y) }; redrawOverlay(); }}
+              onmousemove={(e) => { const r = overlay.getBoundingClientRect(); const x = (e.clientX - r.left) * (overlay.width / r.width); const y = (e.clientY - r.top) * (overlay.height / r.height); if (colorPickerActive && imageSrc) { crosshairPos = { x, y }; const src = srcCanvas || document.querySelector('.viewfinder img'); if (src) { const preview = sampleRegionColor(src, Math.max(0,x-4), Math.max(0,y-4), 8, 8); if (preview) { colorPreviewPos = { x: e.clientX, y: e.clientY }; colorPreviewHex = preview.hex; colorPreviewName = preview.name; } } return; } if (!regionDrag) return; regionSel = { x1: Math.min(regionDrag.x, x), y1: Math.min(regionDrag.y, y), x2: Math.max(regionDrag.x, x), y2: Math.max(regionDrag.y, y) }; redrawOverlay(); }}
               onmouseup={(e) => { if (!regionDrag) return; if (colorPickerActive) return; const r = overlay.getBoundingClientRect(); const x = (e.clientX - r.left) * (overlay.width / r.width); const y = (e.clientY - r.top) * (overlay.height / r.height); const sx1 = Math.min(regionDrag.x, x), sy1 = Math.min(regionDrag.y, y), sx2 = Math.max(regionDrag.x, x), sy2 = Math.max(regionDrag.y, y); regionDrag = null; const src = srcCanvas || document.querySelector('.viewfinder img'); if (sx2 - sx1 < 5 && sy2 - sy1 < 5) { regionSel = null; if (src) { const fc = sampleRegionColor(src, sx1 - 30, sy1 - 30, 60, 60); if (fc) { focusColor = fc; if (fc.samplePos) { fc.samplePos.x = sx1; fc.samplePos.y = sy1; } } } redrawOverlay(); return; } regionSel = { x1: sx1, y1: sy1, x2: sx2, y2: sy2 }; if (src) { const fc = sampleRegionColor(src, sx1, sy1, sx2 - sx1, sy2 - sy1); if (fc) { focusColor = fc; if (fc.samplePos) { fc.samplePos.x = (sx1 + sx2) / 2; fc.samplePos.y = (sy1 + sy2) / 2; } } } redrawOverlay(); }}
-              onmouseleave={() => { regionDrag = null; if (colorPickerActive) colorPreviewPos = null; }}
+              onmouseleave={() => { regionDrag = null; if (colorPickerActive) { colorPreviewPos = null; crosshairPos = null; } }}
               onclick={(e) => { if (!colorPickerActive || !imageSrc) return; const r = overlay.getBoundingClientRect(); const x = (e.clientX - r.left) * (overlay.width / r.width); const y = (e.clientY - r.top) * (overlay.height / r.height); const src = srcCanvas || document.querySelector('.viewfinder img'); if (src) { const fc = sampleRegionColor(src, Math.max(0,x-30), Math.max(0,y-30), 60, 60); if (fc) { fc.samplePos = { x, y }; colorPickerResult = fc; showColorPickerModal = true; colorPickerActive = false; colorPreviewPos = null; } } }}
             ></canvas>
           </div>
