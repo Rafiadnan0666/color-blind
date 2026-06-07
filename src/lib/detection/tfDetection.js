@@ -1,24 +1,5 @@
-import * as tf from '@tensorflow/tfjs';
-import '@tensorflow/tfjs-backend-webgl';
+import * as tf from '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-cpu';
-
-let model = null;
-let loadAttempted = false;
-
-async function initBackend() {
-  // Try backends in order of preference
-  const backends = ['webgl', 'cpu'];
-  for (const backend of backends) {
-    try {
-      await tf.setBackend(backend);
-      await tf.ready();
-      console.log('[TF] Using backend:', tf.getBackend());
-      return;
-    } catch (e) {
-      console.warn(`[TF] Backend "${backend}" failed:`, e?.message);
-    }
-  }
-}
 
 const COCO_CLASSES = [
   'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat',
@@ -33,6 +14,30 @@ const COCO_CLASSES = [
   'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 'toothbrush',
 ];
 
+let model = null;
+let loadAttempted = false;
+
+async function initBackend() {
+  // Try WebGL first via dynamic import so it doesn't crash at module load time
+  try {
+    await import('@tensorflow/tfjs-backend-webgl');
+    await tf.setBackend('webgl');
+    await tf.ready();
+    console.log('[TF] Backend: webgl');
+    return;
+  } catch (e) {
+    console.warn('[TF] WebGL failed, falling back to CPU:', e?.message);
+  }
+  // CPU fallback
+  try {
+    await tf.setBackend('cpu');
+    await tf.ready();
+    console.log('[TF] Backend: cpu');
+  } catch (e) {
+    console.error('[TF] CPU backend also failed:', e?.message);
+  }
+}
+
 export async function loadTFModel() {
   if (model) return model;
   if (loadAttempted) return model ?? null;
@@ -40,34 +45,35 @@ export async function loadTFModel() {
   try {
     await initBackend();
     const cocoSsd = await import('@tensorflow-models/coco-ssd');
-    // @ts-ignore - scoreThreshold is valid at runtime but missing from types
+    // @ts-ignore
     model = await cocoSsd.load({ scoreThreshold: 0.25, maxNumBoxes: 30 }).catch(() => null);
-    if (!model) {
-      // @ts-ignore
-      model = await cocoSsd.load({ scoreThreshold: 0.2, maxNumBoxes: 40 }).catch(() => null);
-    }
-    if (!model) {
-      model = await cocoSsd.load({}).catch(() => null);
-    }
+    // @ts-ignore
+    if (!model) model = await cocoSsd.load({ scoreThreshold: 0.2, maxNumBoxes: 40 }).catch(() => null);
+    if (!model) model = await cocoSsd.load({}).catch(() => null);
+    console.log('[TF] COCO-SSD loaded:', !!model);
     return model;
   } catch (e) {
     console.error('[TF_MODEL_ERROR]', e?.message || e);
     return null;
   }
 }
+
 export async function detectTF(source) {
   if (!model) {
     await loadTFModel();
     if (!model) return [];
   }
-  if (!model) return [];
   try {
     const predictions = await model.detect(source, 40);
     if (!predictions || !Array.isArray(predictions)) return [];
     return predictions.map((p) => ({
-      x1: p.bbox[0], y1: p.bbox[1], x2: p.bbox[0] + p.bbox[2], y2: p.bbox[1] + p.bbox[3],
-      width: p.bbox[2], height: p.bbox[3], score: p.score, classId: COCO_CLASSES.indexOf(p.class),
-      label: p.class, model: 'coco-ssd',
+      x1: p.bbox[0], y1: p.bbox[1],
+      x2: p.bbox[0] + p.bbox[2], y2: p.bbox[1] + p.bbox[3],
+      width: p.bbox[2], height: p.bbox[3],
+      score: p.score,
+      classId: COCO_CLASSES.indexOf(p.class),
+      label: p.class,
+      model: 'coco-ssd',
     }));
   } catch (e) {
     console.error('COCO-SSD detect error:', e);
