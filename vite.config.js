@@ -6,11 +6,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: (id) => {
-          if (id.includes('mathjs')) {
-            return 'mathjs';
-          }
-        }
+        manualChunks: () => 'bundle'
       }
     }
   }
