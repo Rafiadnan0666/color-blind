@@ -20,7 +20,9 @@ export function createSupabaseServerClient(cookies, setHeaders) {
           cookies.set(name, value, { ...options, path: '/' });
         });
         if (headers && setHeaders) {
-          setHeaders(headers);
+          try {
+            setHeaders(headers);
+          } catch (_) {}
         }
       }
     }
