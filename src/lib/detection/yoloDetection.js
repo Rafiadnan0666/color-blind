@@ -1,5 +1,9 @@
 import * as ort from 'onnxruntime-web';
 
+// Force single-threaded WASM — safer cross-browser, avoids SharedArrayBuffer requirement
+ort.env.wasm.numThreads = 1;
+ort.env.wasm.wasmPaths = '/wasm/';
+
 // Disable threading if SharedArrayBuffer is not available
 if (typeof SharedArrayBuffer === 'undefined') {
   ort.env.wasm.numThreads = 1;
