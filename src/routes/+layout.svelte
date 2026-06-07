@@ -7,6 +7,7 @@
   import { notifications, setUserId, userProfile, userSettings } from '$lib/supabase/db';
   import { onMount } from 'svelte';
   import { rawSettings, rawProfile, voiceEnabled, notifEnabled, theme, highContrast, avatarUrl, profileName } from '$lib/stores/settings';
+  import { browser } from '$app/environment';
 
   let { children, data } = $props();
 
@@ -34,19 +35,47 @@
     }
   });
 
-  $effect(() => {
-    const t = $theme;
-    const hc = $highContrast;
-    if (typeof document !== 'undefined') {
-      const cl = document.documentElement.classList;
-      ['theme-light','theme-dark','theme-system','theme-high-contrast','high-contrast'].forEach(c => cl.remove(c));
-      if (t === 'dark') cl.add('theme-dark');
-      else if (t === 'light') cl.add('theme-light');
-      else if (t === 'high-contrast') { cl.add('theme-high-contrast'); cl.add('high-contrast'); }
-      else cl.add('theme-system');
-      if (hc) cl.add('high-contrast');
+  function applyTheme(t) {
+    if (typeof document === 'undefined') return;
+    const cl = document.documentElement.classList;
+    cl.remove('theme-light', 'theme-dark', 'theme-system', 'theme-grey');
+    if (t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      cl.add('theme-dark');
+    } else if (t === 'grey') {
+      cl.add('theme-grey');
+    } else if (t === 'light' || (t === 'system' && window.matchMedia('(prefers-color-scheme: light)').matches)) {
+      cl.add('theme-light');
+    } else {
+      cl.add('theme-light');
     }
+  }
+
+  $effect(() => {
+    applyTheme($theme);
   });
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = () => { if ($theme === 'system') applyTheme('system'); };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  });
+
+  function cycleTheme() {
+    const order = ['system', 'light', 'dark', 'grey'];
+    const current = $theme;
+    const idx = order.indexOf(current);
+    const next = order[(idx + 1) % order.length];
+    rawSettings.update(s => ({ ...s, preferredtheme: next }));
+    userSettings.upsert({ preferredtheme: next }).catch(() => {});
+    applyTheme(next);
+  }
+
+  function getThemeIcon(t) {
+    const icons = { system: 'fa-circle-half-stroke', light: 'fa-sun', dark: 'fa-moon', grey: 'fa-circle' };
+    return icons[t] || 'fa-circle-half-stroke';
+  }
 
   async function loadUnreadCount() {
     try {
@@ -93,6 +122,9 @@
             <a href="/dashboard" class="brut-nav-link" class:brut-nav-link-active={isActive('/dashboard')}>
               Dashboard
             </a>
+            <button class="brut-btn text-sm px-2 py-1.5" onclick={cycleTheme} title="Theme: {$theme}" aria-label="Toggle theme">
+              <i class="fas {getThemeIcon($theme)}"></i>
+            </button>
             <span class="w-px h-6 bg-neo-black"></span>
             <div class="flex items-center gap-2 ml-2">
             {#if $avatarUrl && !avatarError}

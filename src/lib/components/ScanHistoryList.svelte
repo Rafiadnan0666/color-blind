@@ -148,7 +148,7 @@
     justify-content: space-between;
     margin-bottom: 1rem;
     padding-bottom: 0.75rem;
-    border-bottom: 3px solid #0a0a0a;
+    border-bottom: 3px solid var(--color-border-primary, #0a0a0a);
   }
 
   .empty-state {
@@ -171,22 +171,22 @@
     transition: all 0.15s;
     cursor: pointer;
   }
-  .history-item:hover { border-color: #0a0a0a; background: #ffd70008; }
+  .history-item:hover { border-color: var(--color-border-primary, #0a0a0a); background: #ffd70008; }
 
   .item-icon {
     width: 36px; height: 36px;
     display: flex; align-items: center; justify-content: center;
-    border: 3px solid #0a0a0a; background: #ffd70022;
-    flex-shrink: 0; font-size: 0.85rem;
+    border: 3px solid var(--color-border-primary, #0a0a0a); background: #ffd70022;
+    flex-shrink: 0; font-size: 0.85rem; color: var(--color-text-primary, #0a0a0a);
   }
 
   .item-info { flex: 1; min-width: 0; }
-  .item-engine { text-transform: uppercase; letter-spacing: 0.05em; }
+  .item-engine { text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-primary, #0a0a0a); }
 
   .item-time {
     white-space: nowrap;
     font: 700 0.65rem/1 'Space Grotesk', system-ui, sans-serif;
-    color: #888;
+    color: var(--color-text-secondary, #888);
   }
 
   .item-delete {
@@ -200,8 +200,9 @@
     width: 100%;
     margin-top: 0.75rem;
     padding: 0.5rem;
-    border: 3px solid #0a0a0a;
-    background: #fefefe;
+    border: 3px solid var(--color-border-primary, #0a0a0a);
+    background: var(--color-card-bg, #fefefe);
+    color: var(--color-text-primary, #0a0a0a);
     font: 700 0.7rem/1 'Space Grotesk', system-ui, sans-serif;
     text-transform: uppercase;
     cursor: pointer;

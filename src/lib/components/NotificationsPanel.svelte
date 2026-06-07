@@ -128,9 +128,7 @@
 </div>
 
 <style>
-  .notif-panel {
-    padding: 1rem;
-  }
+  .notif-panel { padding: 1rem; }
 
   .panel-header {
     display: flex;
@@ -138,7 +136,7 @@
     justify-content: space-between;
     margin-bottom: 1rem;
     padding-bottom: 0.75rem;
-    border-bottom: 3px solid #0a0a0a;
+    border-bottom: 3px solid var(--color-border-primary, #0a0a0a);
   }
 
   .empty-state {
@@ -150,53 +148,50 @@
     text-align: center;
   }
 
-  .items-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-  }
+  .items-list { display: flex; flex-direction: column; gap: 0.35rem; }
 
   .notif-item {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 0.75rem;
     padding: 0.6rem 0.5rem;
     border: 2px solid transparent;
-    cursor: pointer;
     transition: all 0.15s;
+    cursor: pointer;
+    color: var(--color-text-primary, #0a0a0a);
   }
   .notif-item:hover {
-    border-color: #0a0a0a;
+    border-color: var(--color-border-primary, #0a0a0a);
     background: #ffd70008;
   }
   .notif-item.unread {
     background: #ffd70010;
-    border-color: #ffd700;
+    border-left: 3px solid #ffd700;
   }
 
   .notif-icon {
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid #0a0a0a;
-    background: #fefefe;
+    border: 3px solid var(--color-border-primary, #0a0a0a);
+    background: var(--color-bg-tertiary, #d0d0d0);
     flex-shrink: 0;
-    font-size: 0.8rem;
+    color: var(--color-text-primary, #0a0a0a);
   }
   .notif-icon.unread-icon {
     background: #ffd700;
   }
 
-  .notif-body {
-    flex: 1;
-    min-width: 0;
-  }
+  .notif-body { flex: 1; min-width: 0; }
 
   .notif-time {
     white-space: nowrap;
-    color: #888;
-    flex-shrink: 0;
+    color: var(--color-text-secondary, #888);
+    font-family: 'Space Grotesk', system-ui, sans-serif;
+    font-weight: 700;
+    font-size: 0.65rem;
+    line-height: 1;
   }
 </style>

@@ -7,10 +7,12 @@
   import { sampleRegionColor, extractPalette, detectContour } from '$lib/detection/colorDetection';
   import { classifyScene, getSceneDescription } from '$lib/detection/sceneClassifier';
   import ModeSheet from '$lib/components/ModeSheet.svelte';
+  import TourGuide from '$lib/components/TourGuide.svelte';
   import { scanHistory, favorites, savedColors, savedObjects, objectAnalytics, userSettings } from '$lib/supabase/db';
   import { session, user } from '$lib/stores/auth';
   import { notifyScanComplete, notifyColorSaved, notifyFavoriteSaved } from '$lib/supabase/notifications';
-  import { speakColor, speakObject } from '$lib/utils/voice';
+  import { speakColor, speakObject, speakMeatResult, speakMushroomResult } from '$lib/utils/voice';
+  import { analyzeMeat, analyzeMushroom } from '$lib/detection/foodSafety';
   import { perfMode, objectDetectionEnabled, colorDetectionEnabled, realtimeDetection } from '$lib/stores/settings';
 
   let video = $state(null);
@@ -35,8 +37,9 @@
   let modeSwitchId = 0;
 
   let fusionRotationIndex = 0;
+  let allFusionResults = [];
   const allModels = ['fusion', 'coco', 'ssdlens', 'drug', 'currency', 'accessibility', 'traffic_light'];
-  const mobilenetModels = ['accessibility', 'currency', 'drug', 'traffic_light'];
+  const mobilenetModels = ['accessibility', 'currency', 'drug', 'traffic_light', 'meat', 'mushroom'];
   const tfModels = ['coco', 'ssdlens'];
   const fusionModels = ['coco', ...mobilenetModels];
   let cachedFrameCanvas = null;
@@ -49,6 +52,7 @@
   let engineMode = $state('coco');
   let expandedSummary = $state(false);
   let showSimulation = $state(false);
+  let cvdCompare = $state(false);
 
   let showModeSheet = $state(false);
   let highlightActive = $state(false);
@@ -70,7 +74,11 @@
   let batchFileName = $state('');
   let batchCancelled = false;
   let loadStage = $state('');
+  let showTour = $state(false);
   let wasDetecting = $state(false);
+  let regionSel = $state(null);
+  let regionDrag = $state(null);
+  let _bufCanvas = null;
   let skipFrameCounter = 0;
   let tabHidden = false;
 
@@ -88,26 +96,49 @@
 
   const LOAD_STAGES = ['Initializing camera...', 'Loading detection models...', 'Loading MobileNetV2 model...', 'Warming up...', 'Ready'];
 
+  function clearLoadTimeout() {
+    if (loadTimeoutId) { clearTimeout(loadTimeoutId); loadTimeoutId = null; }
+  }
+
   $effect(() => {
-    if (status === 'Start') { loadProgress = 15; loadStage = LOAD_STAGES[0]; }
-    else if (status === 'Load') { loadProgress = 40; loadStage = LOAD_STAGES[1]; }
-    else if (status === 'Detect') { loadProgress = 60; loadStage = LOAD_STAGES[2]; }
+    if (status === 'Start') { loadProgress = 15; loadStage = LOAD_STAGES[0]; clearLoadTimeout(); }
+    else if (status === 'Load') {
+      loadProgress = 40; loadStage = LOAD_STAGES[1]; clearLoadTimeout();
+      loadTimeoutId = setTimeout(() => {
+        if (loadProgress === 40 && status === 'Load') {
+          loadProgress = 80;
+          loadStage = 'Still loading...';
+        }
+      }, 8000);
+      loadTimeoutId = setTimeout(() => {
+        if (loadProgress < 100 && (status === 'Load' || status === 'Detect')) {
+          loadProgress = 100; loadStage = LOAD_STAGES[4];
+          if (status === 'Load') status = '';
+          setTimeout(() => { loadProgress = 0; loadStage = ''; }, 600);
+        }
+      }, 20000);
+    }
+    else if (status === 'Detect') { loadProgress = 60; loadStage = LOAD_STAGES[2]; clearLoadTimeout(); }
     else if (!status && loadProgress > 0 && loadProgress < 100) {
-      loadProgress = 100; loadStage = LOAD_STAGES[4];
+      loadProgress = 100; loadStage = LOAD_STAGES[4]; clearLoadTimeout();
       setTimeout(() => { loadProgress = 0; loadStage = ''; }, 600);
+    }
+    else if (status && status.includes('Error') || status?.includes('denied') || status?.includes('fail')) {
+      clearLoadTimeout();
+      loadProgress = 0; loadStage = '';
     }
   });
 
   function getEngineLabel(mode) {
-    const labels = { fusion: 'Fusion', coco: 'COCO', ssdlens: 'Objects', drug: 'Drug', currency: 'Currency', accessibility: 'Access', traffic_light: 'Traffic' };
+    const labels = { fusion: 'Fusion', coco: 'COCO', ssdlens: 'Objects', drug: 'Drug', currency: 'Currency', accessibility: 'Access', traffic_light: 'Traffic', meat: 'Meat', mushroom: 'Mushroom' };
     return labels[mode] || mode;
   }
   function getEngineIcon(mode) {
-    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', ssdlens: 'fa-apple-alt', drug: 'fa-pills', currency: 'fa-money-bill-wave', accessibility: 'fa-universal-access', traffic_light: 'fa-traffic-light' };
+    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', ssdlens: 'fa-apple-alt', drug: 'fa-pills', currency: 'fa-money-bill-wave', accessibility: 'fa-universal-access', traffic_light: 'fa-traffic-light', meat: 'fa-drumstick-bite', mushroom: 'fa-seedling' };
     return icons[mode] || 'fa-cube';
   }
   function getEngineColor(mode) {
-    const colors = { fusion: '#ff3366', coco: '#00e5ff', ssdlens: '#39ff14', drug: '#ff6b35', currency: '#ffd700', accessibility: '#00e5ff', traffic_light: '#ff0033' };
+    const colors = { fusion: '#ff3366', coco: '#00e5ff', ssdlens: '#39ff14', drug: '#ff6b35', currency: '#ffd700', accessibility: '#00e5ff', traffic_light: '#ff0033', meat: '#ff6b6b', mushroom: '#9b59b6' };
     return colors[mode] || '#ffd700';
   }
 
@@ -118,7 +149,8 @@
   async function switchMode(m) {
     if (m === engineMode) return;
     if (batchProcessing) { toast('Wait for current batch to finish', 'error'); return; }
-    modeSwitchId++;
+    const swId = ++modeSwitchId;
+    detecting = false;
     saveCurrentResultsToMap();
     engineMode = m;
     savedToHistory = false;
@@ -131,19 +163,28 @@
     focusColor = null;
     focusObj = null;
     prevDets = [];
+    allFusionResults = [];
     scenePalette = [];
+    colorPickerPos = null;
     stopLoop();
-    await reloadModels();
     if (overlay) {
       const octx = overlay.getContext('2d');
       if (octx) octx.clearRect(0, 0, overlay.width, overlay.height);
     }
-    if (useCamera) {
-      status = '';
+    clearLoadTimeout();
+    try {
+      await reloadModels();
+    } catch (e) {
+      console.warn('Model reload error:', e);
+      toast('Some models failed to load', 'error');
+    }
+    if (swId !== modeSwitchId) return;
+    status = '';
+    if (useCamera && video) {
       const detInterval = $perfMode === 'performance' ? 1200 : $perfMode === 'quality' ? 400 : 800;
       detectTimer = setInterval(() => runDetectionFrame(true), detInterval);
       animId = requestAnimationFrame(drawLoop);
-    } else if (imageSrc) {
+    } else if (imageSrc && currentImageIdx >= 0) {
       detectId++;
       runDetect(detectId, currentImageIdx);
     }
@@ -167,6 +208,14 @@
   let showObjPalette = $state(false);
   let objPalette = $state([]);
   let analyzingObj = $state(false);
+  let colorPickerActive = $state(false);
+  let colorPickerPos = $state(null);
+  let colorPreviewPos = $state(null);
+  let colorPreviewHex = $state(null);
+  let colorPreviewName = $state(null);
+  let colorPickerResult = $state(null);
+  let showColorPickerModal = $state(false);
+  let loadTimeoutId = null;
 
   function positionOverlay() {
     if (!video || !overlay) return;
@@ -189,6 +238,9 @@
   onMount(() => {
     srcCanvas = document.createElement('canvas');
     if (useCamera) init();
+    if (typeof localStorage !== 'undefined' && !localStorage.getItem('clrblind_tour_completed')) {
+      setTimeout(() => { showTour = true; }, 1000);
+    }
     window.addEventListener('resize', positionOverlay);
     return () => {
       window.removeEventListener('resize', positionOverlay);
@@ -204,13 +256,16 @@
   function stopLoop() {
     if (animId) { cancelAnimationFrame(animId); animId = null; }
     if (detectTimer) { clearInterval(detectTimer); detectTimer = null; }
+    detecting = false;
+    if (detectTimeoutId) { clearTimeout(detectTimeoutId); detectTimeoutId = null; }
+    allFusionResults = [];
   }
 
   function toast(msg, type = 'success') {
     statusToastMsg = msg;
     statusToastType = type;
     showStatusToast = true;
-    setTimeout(() => { showStatusToast = false; }, 2500);
+    setTimeout(() => { showStatusToast = false; }, 3000);
   }
 
   async function saveCurrentScan() {
@@ -498,27 +553,37 @@
   }
 
   async function detectFrameOnly(skipCheck) {
-    if (!$colorDetectionEnabled || !video || !overlay) return;
+    if (!$colorDetectionEnabled || !video || !overlay) { if (detecting) detecting = false; return; }
     const cw = overlay.width, ch = overlay.height;
-    if (cw < 1 || ch < 1) return;
+    if (cw < 1 || ch < 1) { if (detecting) detecting = false; return; }
     const swId = modeSwitchId;
     const fc = sampleRegionColor(video, cw * 0.3, ch * 0.3, cw * 0.4, ch * 0.4);
-    if (swId !== modeSwitchId) return;
+    if (swId !== modeSwitchId) { detecting = false; return; }
     focusColor = fc;
     focusObj = null;
     detections = [];
     objColors = [];
     detectionsDirty = true;
+    if (detecting) detecting = false;
   }
 
+  let detectTimeoutId = null;
+
   async function runDetectionFrame(skipCheck) {
-    if (!video || !useCamera || !overlay || detecting || tabHidden) { return; }
+    if (!video || !useCamera || !overlay || tabHidden) { return; }
+    if (detecting) {
+      if (detectTimeoutId) clearTimeout(detectTimeoutId);
+      detectTimeoutId = setTimeout(() => { detecting = false; }, 3000);
+      return;
+    }
     if (!$objectDetectionEnabled) { detectFrameOnly(skipCheck); return; }
     if (!skipCheck) {
       skipFrameCounter++;
       if (skipFrameCounter % 3 !== 0) return;
     }
     detecting = true;
+    if (detectTimeoutId) clearTimeout(detectTimeoutId);
+    detectTimeoutId = setTimeout(() => { detecting = false; }, 5000);
     const swId = modeSwitchId;
     frameCount++;
     try {
@@ -527,10 +592,17 @@
       const mk = getMobileNetModelKey(engineMode);
 
       if (engineMode === 'fusion') {
-        const modelId = fusionModels[fusionRotationIndex % fusionModels.length];
-        fusionRotationIndex++;
-        if (modelId === 'coco' || modelId === 'ssdlens') results = await detectTF(frame).catch(() => []);
-        else results = await detectMobileNet(frame, modelId).catch(() => []);
+        const now = Date.now();
+        allFusionResults = allFusionResults.filter(r => now - r.ts < 2000);
+        for (let b = 0; b < 2; b++) {
+          const modelId = fusionModels[fusionRotationIndex % fusionModels.length];
+          fusionRotationIndex++;
+          let batchResults;
+          if (modelId === 'coco' || modelId === 'ssdlens') batchResults = await detectTF(frame).catch(() => []);
+          else batchResults = await detectMobileNet(frame, modelId).catch(() => []);
+          for (const r of batchResults) { r._fusionModel = modelId; r.ts = now; allFusionResults.push(r); }
+        }
+        results = allFusionResults;
       } else if (mk) {
         results = await detectMobileNet(frame, mk).catch(() => []);
       } else if (engineMode === 'ssdlens') {
@@ -538,11 +610,13 @@
       } else {
         results = await detectTF(frame).catch(() => []);
       }
-      if (swId !== modeSwitchId) { detecting = false; return; }
+      if (swId !== modeSwitchId) { detecting = false; if (detectTimeoutId) clearTimeout(detectTimeoutId); detectTimeoutId = null; return; }
 
       const minScore = $perfMode === 'quality' ? 0.4 : $perfMode === 'performance' ? 0.2 : 0.3;
       results = results.filter(d => d.score >= minScore);
       results.sort((a, b) => b.score - a.score);
+      if (engineMode === 'meat') results = results.map(d => ({ ...d, analysis: analyzeMeat(d.label, d.score) }));
+      else if (engineMode === 'mushroom') results = results.map(d => ({ ...d, analysis: analyzeMushroom(d.label, d.score) }));
       const raw = results.slice(0, 15);
       const cw = overlay.width, ch = overlay.height;
       if (!prevDets.length) prevDets = raw;
@@ -563,7 +637,11 @@
       if (best) {
         const fc = sampleRegionColor(video, best.x1, best.y1, best.width, best.height);
         if (swId !== modeSwitchId) { detecting = false; return; }
-        if (focusObj !== best.label) speakObject(best.label, best.score);
+        if (focusObj !== best.label) {
+          if (engineMode === 'meat') speakMeatResult(best.label, best.score);
+          else if (engineMode === 'mushroom') speakMushroomResult(best.label, best.score);
+          else speakObject(best.label, best.score);
+        }
         focusObj = best.label;
         focusColor = fc;
       } else {
@@ -580,6 +658,7 @@
       }
     } catch (e) { console.error('detection error:', e); }
     detecting = false;
+    if (detectTimeoutId) { clearTimeout(detectTimeoutId); detectTimeoutId = null; }
   }
 
   let drawLoopCtx = null;
@@ -686,6 +765,18 @@
   }
 
   let frameTick = 0;
+
+  function applyCVDSimulation(ctx, cw, ch) {
+    const imageData = ctx.getImageData(0, 0, cw, ch);
+    const d = imageData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], g = d[i + 1], b = d[i + 2];
+      d[i] = Math.min(255, 0.567 * r + 0.433 * g);
+      d[i + 1] = Math.min(255, 0.558 * r + 0.442 * g);
+      d[i + 2] = Math.min(255, 0.242 * g + 0.758 * b);
+    }
+    ctx.putImageData(imageData, 0, 0);
+  }
 
   function drawFrame(preds, focus, cw, ch, colors = [], ctx, _focusColor = null) {
     try {
@@ -851,6 +942,37 @@
           ctx.restore();
         }
       }
+      if (cvdCompare && frameTick % 3 === 0) {
+        try {
+          const srcEl = document.querySelector('.cam-viewfinder video') || document.querySelector('.viewfinder img');
+          if (srcEl) {
+            const off = document.createElement('canvas');
+            off.width = cw; off.height = ch;
+            const offCtx = off.getContext('2d');
+            offCtx.drawImage(/** @type {CanvasImageSource} */ (srcEl), 0, 0, cw, ch);
+            const hw = Math.floor(cw / 2);
+            const imgData = offCtx.getImageData(hw, 0, cw - hw, ch);
+            const d = imgData.data;
+            for (let i = 0; i < d.length; i += 4) {
+              const r = d[i], g = d[i + 1], b = d[i + 2];
+              d[i] = Math.min(255, 0.567 * r + 0.433 * g);
+              d[i + 1] = Math.min(255, 0.558 * r + 0.442 * g);
+              d[i + 2] = Math.min(255, 0.242 * g + 0.758 * b);
+            }
+            ctx.putImageData(imgData, hw, 0);
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath(); ctx.moveTo(hw, 0); ctx.lineTo(hw, ch); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.font = `700 11px 'Space Grotesk', system-ui, sans-serif`;
+            ctx.fillStyle = 'rgba(10,10,10,0.7)';
+            ctx.shadowBlur = 0;
+            ctx.fillText('Normal', 8, 20);
+            ctx.fillText('Protanopia Sim', hw + 8, 20);
+          }
+        } catch (_) {}
+      }
       if (highlightActive && _focusColor?.samplePos) {
         drawMagnifier(ctx, _focusColor.samplePos);
       }
@@ -968,6 +1090,8 @@
         if (myId !== undefined && myId !== detectId) return;
         let results = allResults.filter(d => d.score >= ($perfMode === 'quality' ? 0.4 : $perfMode === 'performance' ? 0.2 : 0.3));
         results.sort((a, b) => b.score - a.score);
+        if (engineMode === 'meat') results = results.map(d => ({ ...d, analysis: analyzeMeat(d.label, d.score) }));
+        else if (engineMode === 'mushroom') results = results.map(d => ({ ...d, analysis: analyzeMushroom(d.label, d.score) }));
         detections = results;
 
         const colored = await sampleObjColors(img, results);
@@ -981,7 +1105,11 @@
           if (best) {
             const col = colored.find(c => c.label === best.label)?.color || null;
             if (myId !== undefined && myId !== detectId) return;
-            if (focusObj !== best.label) speakObject(best.label, best.score);
+        if (focusObj !== best.label) {
+          if (engineMode === 'meat') speakMeatResult(best.label, best.score);
+          else if (engineMode === 'mushroom') speakMushroomResult(best.label, best.score);
+          else speakObject(best.label, best.score);
+        }
             focusObj = best.label;
             focusColor = col;
           }
@@ -1171,6 +1299,9 @@
               drawMagnifier(ctx, focusColor.samplePos);
             }
           } catch (e) { console.error('upload draw error:', e); }
+          if (!_bufCanvas) _bufCanvas = document.createElement('canvas');
+          _bufCanvas.width = overlay.width; _bufCanvas.height = overlay.height;
+          _bufCanvas.getContext('2d').drawImage(overlay, 0, 0);
         }
         status = '';
         if (imageIdx !== undefined && imageIdx >= 0 && imageIdx < uploadedImages.length) {
@@ -1266,22 +1397,51 @@
     else { showObjPalette = false; objPalette = []; }
   }
 
+  function redrawOverlay() {
+    if (!overlay || !imageSrc) return;
+    const ctx = overlay.getContext('2d');
+    if (!ctx) return;
+    if (_bufCanvas) {
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      ctx.drawImage(_bufCanvas, 0, 0);
+    }
+    if (regionSel) {
+      ctx.save();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(regionSel.x1, regionSel.y1, regionSel.x2 - regionSel.x1, regionSel.y2 - regionSel.y1);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(regionSel.x1, regionSel.y1, regionSel.x2 - regionSel.x1, regionSel.y2 - regionSel.y1);
+      ctx.setLineDash([]);
+      const cx = (regionSel.x1 + regionSel.x2) / 2, cy = (regionSel.y1 + regionSel.y2) / 2;
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx - 8, cy); ctx.lineTo(cx + 8, cy); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx, cy + 8); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
   async function toggleCam() {
     if (batchProcessing) { toast('Wait for current batch to finish', 'error'); return; }
-    modeSwitchId++;
+    const swId = ++modeSwitchId;
+    detecting = false;
     saveCurrentResultsToMap();
+    stopLoop();
     useCamera = !useCamera;
     imageSrc = null; detections = []; objColors = []; focusColor = null; focusObj = null;
     selectedObj = null; showObjPalette = false; savedToHistory = false;
-    stopLoop();
+    colorPickerActive = false; colorPickerPos = null;
     if (currentStream) {
       currentStream.getTracks().forEach(t => t.stop());
       currentStream = null;
     }
     if (video) video.srcObject = null;
     if (overlay) { const ctx = overlay.getContext('2d'); if (ctx) ctx.clearRect(0, 0, overlay.width, overlay.height); }
-    if (useCamera) { await tick(); init(); }
-    else {
+    if (useCamera) {
+      await tick();
+      init();
+    } else {
       if (uploadedImages.length > 0) {
         switchToImage(uploadedImages.length - 1);
       }
@@ -1308,7 +1468,20 @@
 </script>
 
 <div class="detect-page" class:camera-mode={useCamera} role="region" aria-label="Detection view" ondragover={(e) => e.preventDefault()} ondrop={handleDrop}>
-  {#if status || loadProgress > 0 || batchProcessing}
+  {#if status && (status.includes('Error') || status.includes('denied') || status.includes('permission'))}
+    <div class="loading-overlay">
+      <div class="loading-card">
+        <div class="text-3xl mb-3 opacity-50"><i class="fas fa-exclamation-triangle"></i></div>
+        <div class="font-brut text-brut-sm uppercase mb-2">{status}</div>
+        <button class="brut-btn-primary mt-3 text-brut-xs px-4 py-2" onclick={() => { status = ''; init(); }}>
+          <i class="fas fa-rotate mr-1"></i> Retry Camera
+        </button>
+        <button class="brut-btn mt-2 text-brut-xs px-4 py-2" onclick={() => { status = ''; toggleCam(); }}>
+          <i class="fas fa-upload mr-1"></i> Upload Instead
+        </button>
+      </div>
+    </div>
+  {:else if status || loadProgress > 0 || batchProcessing}
     <div class="loading-overlay">
       <div class="loading-card">
         {#if batchProcessing}
@@ -1362,6 +1535,15 @@
           <button class="tool-btn" onclick={() => showModeSheet = true} aria-label="More modes">
             <i class="fas fa-grid-2"></i>
           </button>
+          <button class="tool-btn" class:active={colorPickerActive} onclick={() => { colorPickerActive = !colorPickerActive; toast(colorPickerActive ? 'Click on image to pick color' : 'Color picker off', colorPickerActive ? 'info' : 'success'); }} aria-label="Color picker" title="Color picker">
+            <i class="fas fa-eyedropper"></i>
+          </button>
+          <button class="tool-btn" class:active={cvdCompare} onclick={() => { cvdCompare = !cvdCompare; toast(cvdCompare ? 'CVD comparison active' : 'CVD comparison off', 'info'); }} aria-label="CVD compare" title="CVD simulation">
+            <i class="fas fa-low-vision"></i>
+          </button>
+          <button class="tool-btn" onclick={() => showTour = true} aria-label="Help" title="Tour">
+            <i class="fas fa-circle-question"></i>
+          </button>
         </div>
       </div>
 
@@ -1383,6 +1565,12 @@
             <i class="fas {getEngineIcon(engineMode)}"></i>
             <span class="text-brut-xs">{getEngineLabel(engineMode)}</span>
           </button>
+          <button class="cam-btn" class:active={colorPickerActive} onclick={() => { colorPickerActive = !colorPickerActive; toast(colorPickerActive ? 'Tap image to pick color' : 'Color picker off', 'success'); }} aria-label="Color picker">
+            <i class="fas fa-eyedropper"></i>
+          </button>
+          <button class="cam-btn" class:active={cvdCompare} onclick={() => { cvdCompare = !cvdCompare; toast(cvdCompare ? 'CVD comparison' : 'CVD off', 'info'); }} aria-label="CVD compare">
+            <i class="fas fa-low-vision"></i>
+          </button>
           <button class="cam-btn" onclick={() => showModeSheet = true} aria-label="More modes">
             <i class="fas fa-grid-2"></i>
           </button>
@@ -1391,7 +1579,37 @@
         <div class="cam-view" class:show={!status}>
           <div class="cam-viewfinder" id="cam-vf">
             <video bind:this={video} autoplay playsinline muted></video>
-            <canvas bind:this={overlay}></canvas>
+            <canvas bind:this={overlay}
+              class="cam-overlay-canvas"
+              class:color-picking={colorPickerActive}
+              onmousemove={(e) => {
+                if (!colorPickerActive || !video || !overlay) { colorPreviewPos = null; return; }
+                const r = overlay.getBoundingClientRect();
+                const x = (e.clientX - r.left) * (overlay.width / r.width);
+                const y = (e.clientY - r.top) * (overlay.height / r.height);
+                const preview = sampleRegionColor(video, Math.max(0,x-4), Math.max(0,y-4), 8, 8);
+                if (preview) {
+                  colorPreviewPos = { x: e.clientX, y: e.clientY };
+                  colorPreviewHex = preview.hex;
+                  colorPreviewName = preview.name;
+                }
+              }}
+              onmouseleave={() => { if (colorPickerActive) colorPreviewPos = null; }}
+              onclick={(e) => {
+                if (!colorPickerActive || !video) return;
+                const r = overlay.getBoundingClientRect();
+                const x = (e.clientX - r.left) * (overlay.width / r.width);
+                const y = (e.clientY - r.top) * (overlay.height / r.height);
+                const fc = sampleRegionColor(video, Math.max(0,x-30), Math.max(0,y-30), 60, 60);
+                if (fc) {
+                  fc.samplePos = { x, y };
+                  colorPickerResult = fc;
+                  showColorPickerModal = true;
+                  colorPickerActive = false;
+                  colorPreviewPos = null;
+                }
+              }}
+            ></canvas>
           </div>
         </div>
 
@@ -1413,9 +1631,9 @@
                 <i class="fas fa-palette mr-1"></i> Color Indicator
               </div>
               <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <div class="cam-color-card" style="border-color: {focusColor.hex}" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false}>
+              <div class="cam-color-card" style="border-color: {focusColor.hex}" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}>
                 <div class="flex items-center gap-2 w-full">
-                  <div class="swatch-lg" style="background: {focusColor.hex}; box-shadow: 0 0 12px {focusColor.hex}66" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false}></div>
+                  <div class="swatch-lg" style="background: {focusColor.hex}; box-shadow: 0 0 12px {focusColor.hex}66" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}></div>
                   <div class="flex-1 min-w-0">
                     <div class="font-brut text-brut-sm capitalize">{focusColor.name}</div>
                     <div class="text-brut-xs text-neo-darkgray">{focusColor.hex} {#if focusColor.r !== undefined}({focusColor.r},{focusColor.g},{focusColor.b}){/if}</div>
@@ -1467,6 +1685,12 @@
                         <span class="font-brut text-brut-xs truncate capitalize">{d.label}</span>
                         <span class="model-pill">{d.model === 'coco-ssd' ? 'AI' : 'MNet'}</span>
                       </div>
+                      {#if d.analysis}
+                        <div class="flex items-center gap-1.5 mt-0.5">
+                          <i class="fas {d.analysis.icon}" style="color:{d.analysis.color};font-size:0.65rem"></i>
+                          <span class="text-brut-xs" style="color:{d.analysis.color}">{d.analysis.safety || d.analysis.toxicity}</span>
+                        </div>
+                      {/if}
                       <div class="flex items-center gap-1.5 mt-0.5">
                         <span class="conf-dot" style="width:{(d.score*100).toFixed(0)}%;background:{getColorFor(d)}"></span>
                         <span class="text-brut-xs text-neo-darkgray">{(d.score*100).toFixed(0)}%</span>
@@ -1514,12 +1738,18 @@
   {:else}
     <div class="upload-ui">
       <div class="toolbar">
-        <div class="toolbar-row">
-          <button class="tool-btn" onclick={toggleCam} aria-label="Use camera"><i class="fas fa-camera"></i></button>
-          <button class="tool-btn active" aria-label="Upload image"><i class="fas fa-upload"></i></button>
-          {#if uploadedImages.length > 0}
-            <button class="tool-btn" onclick={() => document.getElementById('file-input').click()} aria-label="Add more images"><i class="fas fa-plus"></i></button>
-          {/if}
+          <div class="toolbar-row">
+            <button class="tool-btn" onclick={toggleCam} aria-label="Use camera"><i class="fas fa-camera"></i></button>
+            <button class="tool-btn active" aria-label="Upload image"><i class="fas fa-upload"></i></button>
+            {#if uploadedImages.length > 0}
+              <button class="tool-btn" onclick={() => document.getElementById('file-input').click()} aria-label="Add more images"><i class="fas fa-plus"></i></button>
+            {/if}
+            <button class="tool-btn" class:active={colorPickerActive} onclick={() => { colorPickerActive = !colorPickerActive; toast(colorPickerActive ? 'Click image to pick color' : 'Color picker off', 'success'); }} aria-label="Color picker">
+              <i class="fas fa-eyedropper"></i>
+            </button>
+            <button class="tool-btn" class:active={cvdCompare} onclick={() => { cvdCompare = !cvdCompare; toast(cvdCompare ? 'CVD comparison active' : 'CVD comparison off', 'info'); }} aria-label="CVD compare">
+              <i class="fas fa-low-vision"></i>
+            </button>
           <button class="mode-selector" style="--mode-color: {getEngineColor(engineMode)}" onclick={() => showModeSheet = true}>
             <i class="fas {getEngineIcon(engineMode)}"></i>
             <span>{getEngineLabel(engineMode)}</span>
@@ -1534,7 +1764,14 @@
         {#if imageSrc}
           <div class="viewfinder">
             <img src={imageSrc} alt="" class="img">
-            <canvas bind:this={overlay}></canvas>
+            <canvas bind:this={overlay}
+              class:color-picking={colorPickerActive}
+              onmousedown={(e) => { if (!imageSrc) return; const r = overlay.getBoundingClientRect(); const x = (e.clientX - r.left) * (overlay.width / r.width); const y = (e.clientY - r.top) * (overlay.height / r.height); if (colorPickerActive) return; regionSel = null; regionDrag = { x, y }; }}
+              onmousemove={(e) => { const r = overlay.getBoundingClientRect(); const x = (e.clientX - r.left) * (overlay.width / r.width); const y = (e.clientY - r.top) * (overlay.height / r.height); if (colorPickerActive && imageSrc) { const src = srcCanvas || document.querySelector('.viewfinder img'); if (src) { const preview = sampleRegionColor(src, Math.max(0,x-4), Math.max(0,y-4), 8, 8); if (preview) { colorPreviewPos = { x: e.clientX, y: e.clientY }; colorPreviewHex = preview.hex; colorPreviewName = preview.name; } } return; } if (!regionDrag) return; regionSel = { x1: Math.min(regionDrag.x, x), y1: Math.min(regionDrag.y, y), x2: Math.max(regionDrag.x, x), y2: Math.max(regionDrag.y, y) }; redrawOverlay(); }}
+              onmouseup={(e) => { if (!regionDrag) return; if (colorPickerActive) return; const r = overlay.getBoundingClientRect(); const x = (e.clientX - r.left) * (overlay.width / r.width); const y = (e.clientY - r.top) * (overlay.height / r.height); const sx1 = Math.min(regionDrag.x, x), sy1 = Math.min(regionDrag.y, y), sx2 = Math.max(regionDrag.x, x), sy2 = Math.max(regionDrag.y, y); regionDrag = null; const src = srcCanvas || document.querySelector('.viewfinder img'); if (sx2 - sx1 < 5 && sy2 - sy1 < 5) { regionSel = null; if (src) { const fc = sampleRegionColor(src, sx1 - 30, sy1 - 30, 60, 60); if (fc) { focusColor = fc; if (fc.samplePos) { fc.samplePos.x = sx1; fc.samplePos.y = sy1; } } } redrawOverlay(); return; } regionSel = { x1: sx1, y1: sy1, x2: sx2, y2: sy2 }; if (src) { const fc = sampleRegionColor(src, sx1, sy1, sx2 - sx1, sy2 - sy1); if (fc) { focusColor = fc; if (fc.samplePos) { fc.samplePos.x = (sx1 + sx2) / 2; fc.samplePos.y = (sy1 + sy2) / 2; } } } redrawOverlay(); }}
+              onmouseleave={() => { regionDrag = null; if (colorPickerActive) colorPreviewPos = null; }}
+              onclick={(e) => { if (!colorPickerActive || !imageSrc) return; const r = overlay.getBoundingClientRect(); const x = (e.clientX - r.left) * (overlay.width / r.width); const y = (e.clientY - r.top) * (overlay.height / r.height); const src = srcCanvas || document.querySelector('.viewfinder img'); if (src) { const fc = sampleRegionColor(src, Math.max(0,x-30), Math.max(0,y-30), 60, 60); if (fc) { fc.samplePos = { x, y }; colorPickerResult = fc; showColorPickerModal = true; colorPickerActive = false; colorPreviewPos = null; } } }}
+            ></canvas>
           </div>
           {#each modelLoadErrors as err}
             <div class="model-err-banner">{err}</div>
@@ -1569,7 +1806,7 @@
                   <i class="fas fa-plus mr-2"></i> Add More
                 </button>
               {:else}
-                <button class="brut-btn-primary mt-4 inline-block cursor-pointer">
+                <button class="brut-btn mt-4 inline-block cursor-pointer">
                   <i class="fas fa-folder-open mr-2"></i> Select Images
                 </button>
               {/if}
@@ -1584,16 +1821,24 @@
           <div class="color-indicator-tag">
             <i class="fas fa-palette mr-1"></i> Color Indicator
           </div>
-          <div class="upload-color-card" style="border-color: {focusColor.hex}" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false}>
+          <div class="upload-color-card" style="border-color: {focusColor.hex}" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}>
             <div class="flex items-center gap-3 w-full">
-              <div class="swatch-xl" style="background: {focusColor.hex}; box-shadow: 0 0 16px {focusColor.hex}88" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false}></div>
+              <div class="swatch-xl" style="background: {focusColor.hex}; box-shadow: 0 0 16px {focusColor.hex}88" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}></div>
               <div class="flex-1 min-w-0">
                 <div class="font-brut text-brut capitalize">{focusColor.name}</div>
                 <div class="text-brut-xs text-neo-darkgray font-mono">{focusColor.hex}</div>
                 {#if focusColor.r !== undefined}
                   <div class="text-brut-2xs text-neo-darkgray font-mono">RGB({focusColor.r},{focusColor.g},{focusColor.b})</div>
                 {/if}
-                {#if focusObj}<div class="text-brut-xs text-neo-darkgray capitalize mt-0.5">{focusObj}</div>{/if}
+                {#if focusObj}
+                  <div class="text-brut-xs text-neo-darkgray capitalize mt-0.5">{focusObj}</div>
+                  {#if objColors[0]?.analysis}
+                    <div class="flex items-center gap-1 mt-0.5">
+                      <i class="fas {objColors[0].analysis.icon}" style="color:{objColors[0].analysis.color};font-size:0.65rem"></i>
+                      <span class="text-brut-xs" style="color:{objColors[0].analysis.color}">{objColors[0].analysis.advice}</span>
+                    </div>
+                  {/if}
+                {/if}
               </div>
               <div class="flex items-center gap-1.5">
                 {#if focusColor.confusion?.length}
@@ -1645,6 +1890,12 @@
                     <span class="font-brut text-brut-sm truncate capitalize">{d.label}</span>
                     <span class="model-badge">{d.model === 'coco-ssd' ? 'AI' : 'MNet'}</span>
                   </div>
+                  {#if d.analysis}
+                    <div class="flex items-center gap-1.5 mt-0.5">
+                      <i class="fas {d.analysis.icon}" style="color:{d.analysis.color};font-size:0.7rem"></i>
+                      <span class="font-brut text-brut-xs" style="color:{d.analysis.color}">{d.analysis.safety || d.analysis.toxicity}</span>
+                    </div>
+                  {/if}
                   <div class="flex items-center gap-2 mt-0.5">
                     <span class="font-brut text-brut-xs capitalize">{d.color.name}</span>
                     <span class="text-brut-xs font-mono">{d.color.hex}</span>
@@ -1708,7 +1959,8 @@
           </div>
           <div class="scene-palette-grid">
             {#each scenePalette as pc}
-              <div class="scene-chip">
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div class="scene-chip" onclick={() => { if (pc.positions?.[0]) { focusColor = { ...focusColor || {}, ...pc, samplePos: pc.positions[0] }; highlightActive = true; } }}>
                 <div class="scene-swatch" style="background:{pc.hex}"></div>
                 <div class="scene-chip-info">
                   <span class="font-brut text-brut-xs capitalize truncate">{pc.name}</span>
@@ -1728,7 +1980,7 @@
           </div>
           <div class="flex flex-wrap gap-1.5">
             {#each objColors as d}
-              <span class="tag" style="--c:{getColorFor(d)}">{d.label} <span class="opacity-60 ml-1">{(d.score*100).toFixed(0)}</span></span>
+              <span class="tag" style="--c:{getColorFor(d)}">{d.label} <span class="opacity-60 ml-1">{(d.score*100).toFixed(0)}</span>{#if d.analysis}<span class="ml-1 text-brut-2xs" style="color:{d.analysis.color}">· {d.analysis.safety || d.analysis.toxicity}</span>{/if}</span>
             {/each}
           </div>
         </div>
@@ -1749,13 +2001,21 @@
               <div class="desk-color-tag">
                 <i class="fas fa-palette mr-1"></i> Color Indicator
               </div>
-              <div class="desk-color-card" style="border-color: {focusColor.hex}" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false}>
+              <div class="desk-color-card" style="border-color: {focusColor.hex}" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}>
               <div class="desk-color-header">
-                <div class="swatch-lg" style="background: {focusColor.hex}; box-shadow: 0 0 12px {focusColor.hex}66" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false}></div>
+                <div class="swatch-lg" style="background: {focusColor.hex}; box-shadow: 0 0 12px {focusColor.hex}66" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}></div>
                 <div class="flex-1 min-w-0">
                   <div class="font-brut text-brut-sm capitalize">{focusColor.name}</div>
                   <div class="text-brut-xs text-neo-darkgray">{focusColor.hex} {#if focusColor.r !== undefined}({focusColor.r},{focusColor.g},{focusColor.b}){/if}</div>
-                  {#if focusObj}<div class="text-brut-xs text-neo-darkgray capitalize">{focusObj}</div>{/if}
+                  {#if focusObj}
+                    <div class="text-brut-xs text-neo-darkgray capitalize">{focusObj}</div>
+                    {#if objColors[0]?.analysis}
+                      <div class="flex items-center gap-1 mt-0.5">
+                        <i class="fas {objColors[0].analysis.icon}" style="color:{objColors[0].analysis.color};font-size:0.6rem"></i>
+                        <span class="text-brut-xs" style="color:{objColors[0].analysis.color}">{objColors[0].analysis.advice}</span>
+                      </div>
+                    {/if}
+                  {/if}
                 </div>
                 <div class="flex items-center gap-1">
                   {#if focusColor.confusion?.length}
@@ -1805,6 +2065,12 @@
                       <span class="font-brut text-brut-xs truncate capitalize">{d.label}</span>
                       <span class="model-pill">{d.model === 'coco-ssd' ? 'AI' : 'MNet'}</span>
                     </div>
+                    {#if d.analysis}
+                      <div class="flex items-center gap-1 mt-0.5">
+                        <i class="fas {d.analysis.icon}" style="color:{d.analysis.color};font-size:0.6rem"></i>
+                        <span class="text-brut-xs" style="color:{d.analysis.color}">{d.analysis.safety || d.analysis.toxicity}</span>
+                      </div>
+                    {/if}
                     <div class="flex items-center gap-1.5 mt-0.5">
                       <span class="conf-dot" style="width:{(d.score*100).toFixed(0)}%;background:{getColorFor(d)}"></span>
                       <span class="text-brut-xs text-neo-darkgray">{(d.score*100).toFixed(0)}%</span>
@@ -1844,12 +2110,66 @@
           </div>
         {/if}
       </div>
+
+{#if colorPreviewPos && colorPreviewHex}
+  <div class="color-preview-follower" style="left: {colorPreviewPos.x + 16}px; top: {colorPreviewPos.y - 40}px;">
+    <div class="color-preview-swatch" style="background: {colorPreviewHex}; box-shadow: 0 0 12px {colorPreviewHex}88;"></div>
+    <span class="color-preview-label">{colorPreviewName || colorPreviewHex}</span>
+  </div>
+{/if}
+
+{#if showColorPickerModal && colorPickerResult}
+  <div class="cp-modal-overlay" role="presentation" onclick={() => showColorPickerModal = false}>
+    <div class="cp-modal-card" onclick={(e) => e.stopPropagation()} role="dialog" tabindex="0" aria-label="Color picker result">
+      <button class="cp-modal-close" onclick={() => showColorPickerModal = false} aria-label="Close"><i class="fas fa-times"></i></button>
+      <div class="cp-modal-swatch" style="background: {colorPickerResult.hex};">
+        {#if colorPickerResult.samplePos}
+          <div class="cp-modal-coords">x:{Math.round(colorPickerResult.samplePos.x)} y:{Math.round(colorPickerResult.samplePos.y)}</div>
+        {/if}
+      </div>
+      <div class="cp-modal-body">
+        <h3 class="cp-modal-name">{colorPickerResult.name}</h3>
+        <div class="cp-modal-hex">{colorPickerResult.hex}</div>
+        {#if colorPickerResult.r !== undefined}
+          <div class="cp-modal-rgb">RGB({colorPickerResult.r}, {colorPickerResult.g}, {colorPickerResult.b})</div>
+        {/if}
+        {#if colorPickerResult.confusion?.length}
+          <div class="cp-modal-sim">
+            <span class="cp-modal-sim-label">CVD Simulation</span>
+            <div class="cp-modal-sim-row">
+              {#each colorPickerResult.confusion as cvd}
+                <div class="cp-modal-sim-chip" title={cvd.label}>
+                  <div class="cp-modal-sim-dot" style="background:{cvd.hex};"></div>
+                  <span>{cvd.label.slice(0,5)}</span>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        {#if colorPickerResult.hsl}
+          <div class="cp-modal-detail">HSL({colorPickerResult.hsl.h}° {colorPickerResult.hsl.s}% {colorPickerResult.hsl.l}%)</div>
+        {/if}
+        <div class="cp-modal-actions">
+          <button class="cp-modal-save" onclick={() => { saveColor(colorPickerResult); showColorPickerModal = false; }}>
+            <i class="fas fa-floppy-disk mr-1"></i> Save Color
+          </button>
+          <button class="cp-modal-cancel" onclick={() => showColorPickerModal = false}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
 {#if showStatusToast}
-  <div class="toast" class:toast-error={statusToastType === 'error'} transition:fly={{ y: -20, duration: 200 }}>
-    <i class="fas {statusToastType === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+  <div class="toast" class:toast-error={statusToastType === 'error'} class:toast-info={statusToastType === 'info'} transition:fly={{ y: -20, duration: 200 }}>
+    <i class="fas {statusToastType === 'success' ? 'fa-check-circle' : statusToastType === 'info' ? 'fa-info-circle' : 'fa-exclamation-circle'}"></i>
     {statusToastMsg}
   </div>
 {/if}
+
+<TourGuide show={showTour} onClose={() => showTour = false} />
 
 <style>
   .detect-page { margin: 0 auto; }
@@ -1891,7 +2211,9 @@
   .cam-view.show { opacity: 1; }
   .cam-viewfinder { position: absolute; inset: 0; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center; }
   .cam-viewfinder video { width: 100%; height: 100%; object-fit: contain; }
-  .cam-viewfinder canvas { position: absolute; pointer-events: none; }
+  .cam-viewfinder canvas { position: absolute; }
+  .cam-viewfinder canvas.cam-overlay-canvas { cursor: crosshair; }
+  .viewfinder canvas.color-picking { cursor: crosshair; }
   .cam-badge {
     position: absolute; top: 56px; left: 8px; z-index: 15;
     padding: 0.25rem 0.5rem; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.3);
@@ -2033,7 +2355,7 @@
   .view.show { opacity: 1; }
   .viewfinder { position: relative; width: 100%; border: 4px solid #0a0a0a; box-shadow: 6px 6px 0 #0a0a0a; overflow: hidden; background: #0a0a0a; }
   video, .img { width: 100%; display: block; }
-  .viewfinder canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+  .viewfinder canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; cursor: crosshair; }
 
   .upload-thumbnails { display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0; background: #fefefe; border: 2px solid #0a0a0a; box-shadow: 3px 3px 0 #0a0a0a; margin-top: 0.4rem; }
   .thumb-strip { display: flex; gap: 0.35rem; overflow-x: auto; flex: 1; scrollbar-width: thin; padding: 0.2rem 0; }
@@ -2132,6 +2454,34 @@
     font: 700 0.65rem/1.2 'Space Grotesk', system-ui, sans-serif; margin: 0.25rem 0.5rem;
   }
 
+  .color-preview-follower { position: fixed; z-index: 400; pointer-events: none; display: flex; align-items: center; gap: 0.4rem; background: rgba(254,254,254,0.95); border: 2px solid #0a0a0a; padding: 0.3rem 0.5rem; box-shadow: 3px 3px 0 #0a0a0a; animation: fadeIn 0.1s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+  .color-preview-swatch { width: 20px; height: 20px; border: 2px solid #0a0a0a; flex-shrink: 0; border-radius: 50%; }
+  .color-preview-label { font: 700 0.6rem/1 'Space Grotesk', system-ui, sans-serif; text-transform: uppercase; color: #0a0a0a; }
+
+  .cp-modal-overlay { position: fixed; inset: 0; z-index: 500; background: rgba(10,10,10,0.55); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+  .cp-modal-card { width: 100%; max-width: 340px; background: #fefefe; border: 4px solid #0a0a0a; box-shadow: 10px 10px 0 #0a0a0a; position: relative; overflow: hidden; animation: modalIn 0.2s ease-out; }
+  @keyframes modalIn { from { opacity: 0; transform: scale(0.9) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+  .cp-modal-close { position: absolute; top: 6px; right: 6px; z-index: 1; width: 32px; height: 32px; border: 2px solid #0a0a0a; background: #ff0033; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; transition: all 0.15s; }
+  .cp-modal-close:hover { background: #cc0029; transform: scale(1.05); }
+  .cp-modal-swatch { height: 140px; border-bottom: 4px solid #0a0a0a; display: flex; align-items: flex-end; justify-content: flex-end; padding: 0.4rem; }
+  .cp-modal-coords { font: 700 0.55rem/1 'Space Grotesk', system-ui, sans-serif; background: rgba(10,10,10,0.7); color: #fff; padding: 0.2rem 0.4rem; }
+  .cp-modal-body { padding: 1rem; display: flex; flex-direction: column; gap: 0.4rem; }
+  .cp-modal-name { font: 700 1.2rem/1.1 'Space Grotesk', system-ui, sans-serif; text-transform: capitalize; color: #0a0a0a; }
+  .cp-modal-hex { font: 700 0.85rem/1 'Space Grotesk', system-ui, sans-serif; color: #666; font-family: 'SF Mono', 'Fira Code', monospace; }
+  .cp-modal-rgb { font: 500 0.7rem/1 'Space Grotesk', system-ui, sans-serif; color: #888; }
+  .cp-modal-detail { font: 500 0.65rem/1 'Space Grotesk', system-ui, sans-serif; color: #aaa; }
+  .cp-modal-sim { border-top: 2px solid #0a0a0a; padding-top: 0.5rem; margin-top: 0.2rem; }
+  .cp-modal-sim-label { font: 700 0.6rem/1 'Space Grotesk', system-ui, sans-serif; text-transform: uppercase; color: #888; display: block; margin-bottom: 0.3rem; }
+  .cp-modal-sim-row { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .cp-modal-sim-chip { display: flex; align-items: center; gap: 0.25rem; font: 500 0.6rem/1 'Space Grotesk', system-ui, sans-serif; color: #555; text-transform: uppercase; }
+  .cp-modal-sim-dot { width: 14px; height: 14px; border: 2px solid #0a0a0a; flex-shrink: 0; border-radius: 50%; }
+  .cp-modal-actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; border-top: 3px solid #0a0a0a; padding-top: 0.75rem; }
+  .cp-modal-save { flex: 1; padding: 0.6rem; border: 3px solid #0a0a0a; background: #ffd700; font: 700 0.7rem/1 'Space Grotesk', system-ui, sans-serif; text-transform: uppercase; cursor: pointer; box-shadow: 3px 3px 0 #0a0a0a; transition: all 0.15s; }
+  .cp-modal-save:hover { transform: translate(-2px,-2px); box-shadow: 5px 5px 0 #0a0a0a; }
+  .cp-modal-cancel { padding: 0.6rem 1rem; border: 3px solid #0a0a0a; background: #fefefe; font: 700 0.7rem/1 'Space Grotesk', system-ui, sans-serif; text-transform: uppercase; cursor: pointer; box-shadow: 3px 3px 0 #0a0a0a; transition: all 0.15s; }
+  .cp-modal-cancel:hover { transform: translate(-2px,-2px); box-shadow: 5px 5px 0 #0a0a0a; }
+
   .toast {
     position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 300;
     background: #39ff14; color: #0a0a0a; border: 3px solid #0a0a0a; box-shadow: 4px 4px 0 #0a0a0a;
@@ -2139,6 +2489,7 @@
     display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;
   }
   .toast.toast-error { background: #ff0033; color: #fff; }
+  .toast.toast-info { background: #00e5ff; color: #0a0a0a; }
 
   .scene-palette-panel { margin-top: 0.6rem; }
   .scene-palette-grid { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.35rem; }

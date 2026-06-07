@@ -126,6 +126,10 @@ export const savedColors = {
     if (error) throw error;
     return data;
   },
+  /**
+   * @param {string} id
+   * @param {{ colorName?: string, hexCode?: string, rgbValue?: string }} opts
+   */
   async update(id, { colorName, hexCode, rgbValue }) {
     const userid = await uid();
     if (!userid) return;
