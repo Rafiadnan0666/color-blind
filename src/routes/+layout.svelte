@@ -204,7 +204,7 @@
     {/if}
   </header>
 
-  <main class="flex-1">
+  <main class="flex-1" style="overflow-x: hidden; max-width: 100vw;">
     {@render children()}
   </main>
 

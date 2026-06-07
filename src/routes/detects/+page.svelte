@@ -562,33 +562,28 @@
   }
 
   async function detectFrameOnly(skipCheck) {
-    if (!$colorDetectionEnabled || !video || !overlay) { if (detecting) detecting = false; return; }
+    if (!$colorDetectionEnabled || !video || !overlay) { detecting = false; return; }
     const cw = overlay.width, ch = overlay.height;
-    if (cw < 1 || ch < 1) { if (detecting) detecting = false; return; }
+    if (cw < 1 || ch < 1) { detecting = false; return; }
     const swId = modeSwitchId;
-    const fc = sampleRegionColor(video, cw * 0.3, ch * 0.3, cw * 0.4, ch * 0.4);
-    if (swId !== modeSwitchId) { detecting = false; return; }
-    focusColor = fc;
-    if (detecting) detecting = false;
+    try {
+      const fc = sampleRegionColor(video, cw * 0.3, ch * 0.3, cw * 0.4, ch * 0.4);
+      if (swId !== modeSwitchId) return;
+      focusColor = fc;
+    } finally { detecting = false; }
   }
 
   let detectTimeoutId = null;
 
   async function runDetectionFrame(skipCheck) {
     if (!video || !useCamera || !overlay || tabHidden) { return; }
-    if (detecting) {
-      if (detectTimeoutId) clearTimeout(detectTimeoutId);
-      detectTimeoutId = setTimeout(() => { detecting = false; }, 3000);
-      return;
-    }
+    if (detecting) return;
     if (!$objectDetectionEnabled) { detectFrameOnly(skipCheck); return; }
     if (!skipCheck) {
       skipFrameCounter++;
       if (skipFrameCounter % 3 !== 0) return;
     }
     detecting = true;
-    if (detectTimeoutId) clearTimeout(detectTimeoutId);
-    detectTimeoutId = setTimeout(() => { detecting = false; }, 5000);
     const swId = modeSwitchId;
     frameCount++;
     try {
@@ -597,8 +592,7 @@
       const mk = getMobileNetModelKey(engineMode);
 
       if (engineMode === 'fusion') {
-        const now = Date.now();
-        allFusionResults = allFusionResults.filter(r => now - r.ts < 5000);
+        allFusionResults = [];
         const batchSize = $perfMode === 'performance' ? 2 : $perfMode === 'quality' ? 5 : 3;
         for (let b = 0; b < batchSize; b++) {
           const modelId = fusionModels[fusionRotationIndex % fusionModels.length];
@@ -606,30 +600,31 @@
           let batchResults;
           if (modelId === 'coco') batchResults = await detectTF(frame).catch(() => []);
           else batchResults = await detectMobileNet(frame, modelId).catch(() => []);
-          for (const r of batchResults) { r._fusionModel = modelId; r.ts = now; allFusionResults.push(r); }
+          allFusionResults.push(...batchResults);
         }
-        results = dedupDetections(allFusionResults);
+        results = allFusionResults;
       } else if (mk) {
         results = await detectMobileNet(frame, mk).catch(() => []);
       } else {
         results = await detectTF(frame).catch(() => []);
       }
-      if (swId !== modeSwitchId) { detecting = false; if (detectTimeoutId) clearTimeout(detectTimeoutId); detectTimeoutId = null; return; }
+      if (swId !== modeSwitchId) { detecting = false; return; }
 
-      const minScore = $perfMode === 'quality' ? 0.4 : $perfMode === 'performance' ? 0.2 : 0.3;
-      results = results.filter(d => d.score >= minScore);
-      results.sort((a, b) => b.score - a.score);
-      if (engineMode === 'meat') results = results.map(d => ({ ...d, analysis: analyzeMeat(d.label, d.score) }));
-      else if (engineMode === 'mushroom') results = results.map(d => ({ ...d, analysis: analyzeMushroom(d.label, d.score) }));
-      const raw = results.slice(0, 15);
+      if (engineMode === 'meat' || engineMode === 'mushroom') {
+        results = results.filter(d => d.score >= 0.2);
+        if (engineMode === 'meat') results = results.map(d => ({ ...d, analysis: analyzeMeat(d.label, d.score) }));
+        else if (engineMode === 'mushroom') results = results.map(d => ({ ...d, analysis: analyzeMushroom(d.label, d.score) }));
+      } else {
+        results = filterDetections(results);
+      }
       const cw = overlay.width, ch = overlay.height;
-      if (!prevDets.length) prevDets = raw;
-      const sm = raw.map((d, i) => {
+      if (!prevDets.length) prevDets = results;
+      const sm = results.map((d, i) => {
         if (i >= prevDets.length) return d;
         const p = prevDets[i];
         return { ...d, x1: lerp(p.x1, d.x1, 0.3), y1: lerp(p.y1, d.y1, 0.3), x2: lerp(p.x2, d.x2, 0.3), y2: lerp(p.y2, d.y2, 0.3), width: lerp(p.width, d.width, 0.3), height: lerp(p.height, d.height, 0.3) };
       });
-      prevDets = raw;
+      prevDets = results;
       if (swId !== modeSwitchId) { detecting = false; return; }
       detections = sm;
 
@@ -661,8 +656,7 @@
         scenePalette = fullPalette;
       }
     } catch (e) { console.error('detection error:', e); }
-    detecting = false;
-    if (detectTimeoutId) { clearTimeout(detectTimeoutId); detectTimeoutId = null; }
+    finally { detecting = false; }
   }
 
   let drawLoopCtx = null;
@@ -768,24 +762,39 @@
     ctx.closePath();
   }
 
-  let frameTick = 0;
+  const CONFIDENCE_THRESHOLD = 0.45;
+  const MAX_DETECTIONS = 10;
+  const NMS_IOU_THRESHOLD = 0.45;
 
-  function dedupDetections(dets) {
-    const iou = (a, b) => {
-      const x1 = Math.max(a.x1, b.x1), y1 = Math.max(a.y1, b.y1);
-      const x2 = Math.min(a.x2, b.x2), y2 = Math.min(a.y2, b.y2);
-      const i = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
-      const u = (a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - i;
-      return u > 0 ? i / u : 0;
-    };
+  function iou(a, b) {
+    const x1 = Math.max(a.x1, b.x1), y1 = Math.max(a.y1, b.y1);
+    const x2 = Math.min(a.x2, b.x2), y2 = Math.min(a.y2, b.y2);
+    const i = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+    const u = (a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - i;
+    return u > 0 ? i / u : 0;
+  }
+
+  function applyNMS(dets, iouThreshold = NMS_IOU_THRESHOLD) {
+    const sorted = [...dets].sort((a, b) => b.score - a.score);
     const kept = [];
-    for (const d of dets) {
-      if (!kept.some(k => k.label === d.label && iou(k, d) > 0.5)) {
+    for (const d of sorted) {
+      if (!kept.some(k => k.label === d.label && iou(k, d) > iouThreshold)) {
         kept.push(d);
       }
     }
     return kept;
   }
+
+  function filterDetections(results) {
+    const totalRaw = results.length;
+    const afterConf = results.filter(d => d.score >= CONFIDENCE_THRESHOLD);
+    const afterNms = applyNMS(afterConf);
+    const capped = afterNms.slice(0, MAX_DETECTIONS);
+    console.debug(`[Detect] raw=${totalRaw} afterConf=${afterConf.length} afterNMS=${afterNms.length} final=${capped.length}`);
+    return capped;
+  }
+
+  let frameTick = 0;
 
   function drawFrame(preds, focus, cw, ch, colors = [], ctx, _focusColor = null) {
     try {
@@ -1116,10 +1125,14 @@
           allResults = await detectMobileNet(frame, mk).catch(() => []);
         }
         if (myId !== undefined && myId !== detectId) return;
-        let results = allResults.filter(d => d.score >= ($perfMode === 'quality' ? 0.4 : $perfMode === 'performance' ? 0.2 : 0.3));
-        results.sort((a, b) => b.score - a.score);
-        if (engineMode === 'meat') results = results.map(d => ({ ...d, analysis: analyzeMeat(d.label, d.score) }));
-        else if (engineMode === 'mushroom') results = results.map(d => ({ ...d, analysis: analyzeMushroom(d.label, d.score) }));
+        let results;
+        if (engineMode === 'meat' || engineMode === 'mushroom') {
+          results = allResults.filter(d => d.score >= 0.2);
+          if (engineMode === 'meat') results = results.map(d => ({ ...d, analysis: analyzeMeat(d.label, d.score) }));
+          else if (engineMode === 'mushroom') results = results.map(d => ({ ...d, analysis: analyzeMushroom(d.label, d.score) }));
+        } else {
+          results = filterDetections(allResults);
+        }
         detections = results;
 
         const colored = await sampleObjColors(img, results);
@@ -2516,7 +2529,7 @@
     position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 300;
     background: #39ff14; color: #0a0a0a; border: 3px solid #0a0a0a; box-shadow: 4px 4px 0 #0a0a0a;
     padding: 0.6rem 1.2rem; font: 700 0.75rem/1 'Space Grotesk', system-ui, sans-serif;
-    display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;
+    display: flex; align-items: center; gap: 0.5rem; white-space: normal; max-width: 90vw; word-break: break-word;
   }
   .toast.toast-error { background: #ff0033; color: #fff; }
   .toast.toast-info { background: #00e5ff; color: #0a0a0a; }

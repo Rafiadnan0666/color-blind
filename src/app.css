@@ -127,6 +127,11 @@ html.theme-light {
     -moz-osx-font-smoothing: grayscale;
   }
 
+  html, body {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
   body {
     background-color: var(--color-bg-primary);
     color: var(--color-text-primary);

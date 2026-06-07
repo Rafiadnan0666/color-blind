@@ -445,5 +445,5 @@
   .star-btn:hover { transform: scale(1.2); }
   .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
   .stat-item { display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.5rem; border: 2px solid var(--color-border-primary); }
-  .toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 300; background: #39ff14; color: #0a0a0a; border: 3px solid var(--color-border-primary); box-shadow: 4px 4px 0 var(--color-shadow); padding: 0.6rem 1.2rem; font: 700 0.75rem/1 'Space Grotesk', system-ui, sans-serif; display: flex; align-items: center; gap: 0.5rem; white-space: nowrap; }
+  .toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 300; background: #39ff14; color: #0a0a0a; border: 3px solid var(--color-border-primary); box-shadow: 4px 4px 0 var(--color-shadow); padding: 0.6rem 1.2rem; font: 700 0.75rem/1 'Space Grotesk', system-ui, sans-serif; display: flex; align-items: center; gap: 0.5rem; white-space: normal; max-width: 90vw; word-break: break-word; }
 </style>
