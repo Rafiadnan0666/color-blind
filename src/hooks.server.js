@@ -8,7 +8,7 @@ const SECURITY_HEADERS = {
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
-  'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+  'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'credentialless',
   'Permissions-Policy': 'camera=(self), microphone=(self), geolocation=(self)',
 };
@@ -18,11 +18,7 @@ export const handle = async ({ event, resolve }) => {
 
   /** @type {{ session: import('@supabase/supabase-js').Session | null; user: import('@supabase/supabase-js').User | null } | null} */
   let sessionCache = null;
-  const response = await resolve(event);
-  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
-  response.headers.set('Cross-Origin-Embedder-Policy', 'credentialless');
-  response.headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
-  return response;
+
   event.locals.safeGetSession = async () => {
     if (sessionCache) return sessionCache;
 
@@ -32,10 +28,7 @@ export const handle = async ({ event, resolve }) => {
       return sessionCache;
     }
 
-    const {
-      data: { user },
-      error
-    } = await event.locals.supabase.auth.getUser();
+    const { data: { user }, error } = await event.locals.supabase.auth.getUser();
 
     if (error) {
       sessionCache = { session: null, user: null };
