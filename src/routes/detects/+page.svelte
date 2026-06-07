@@ -38,9 +38,9 @@
 
   let fusionRotationIndex = 0;
   let allFusionResults = [];
-  const allModels = ['fusion', 'coco', 'ssdlens', 'drug', 'currency', 'accessibility', 'traffic_light'];
+  const allModels = ['fusion', 'coco', 'drug', 'currency', 'accessibility', 'traffic_light'];
   const mobilenetModels = ['accessibility', 'currency', 'drug', 'traffic_light', 'meat', 'mushroom'];
-  const tfModels = ['coco', 'ssdlens'];
+  const tfModels = ['coco'];
   const fusionModels = ['coco', ...mobilenetModels];
   let cachedFrameCanvas = null;
   let scenePalette = $state([]);
@@ -98,6 +98,7 @@
 
   function clearLoadTimeout() {
     if (loadTimeoutId) { clearTimeout(loadTimeoutId); loadTimeoutId = null; }
+    if (loadForceReadyId) { clearTimeout(loadForceReadyId); loadForceReadyId = null; }
   }
 
   $effect(() => {
@@ -110,7 +111,7 @@
           loadStage = 'Still loading...';
         }
       }, 8000);
-      loadTimeoutId = setTimeout(() => {
+      loadForceReadyId = setTimeout(() => {
         if (loadProgress < 100 && (status === 'Load' || status === 'Detect')) {
           loadProgress = 100; loadStage = LOAD_STAGES[4];
           if (status === 'Load') status = '';
@@ -130,15 +131,15 @@
   });
 
   function getEngineLabel(mode) {
-    const labels = { fusion: 'Fusion', coco: 'COCO', ssdlens: 'Objects', drug: 'Medicine', currency: 'Currency', accessibility: 'Access', traffic_light: 'Traffic', meat: 'Meat', mushroom: 'Mushroom' };
+    const labels = { fusion: 'Fusion', coco: 'COCO', drug: 'Medicine', currency: 'Currency', accessibility: 'Access', traffic_light: 'Traffic', meat: 'Meat', mushroom: 'Mushroom' };
     return labels[mode] || mode;
   }
   function getEngineIcon(mode) {
-    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', ssdlens: 'fa-apple-alt', drug: 'fa-tablets', currency: 'fa-money-bill-wave', accessibility: 'fa-universal-access', traffic_light: 'fa-traffic-light', meat: 'fa-drumstick-bite', mushroom: 'fa-seedling' };
+    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', drug: 'fa-tablets', currency: 'fa-money-bill-wave', accessibility: 'fa-universal-access', traffic_light: 'fa-traffic-light', meat: 'fa-drumstick-bite', mushroom: 'fa-seedling' };
     return icons[mode] || 'fa-cube';
   }
   function getEngineColor(mode) {
-    const colors = { fusion: '#ff3366', coco: '#00e5ff', ssdlens: '#39ff14', drug: '#ff6b35', currency: '#ffd700', accessibility: '#00e5ff', traffic_light: '#ff0033', meat: '#ff6b6b', mushroom: '#9b59b6' };
+    const colors = { fusion: '#ff3366', coco: '#00e5ff', drug: '#ff6b35', currency: '#ffd700', accessibility: '#00e5ff', traffic_light: '#ff0033', meat: '#ff6b6b', mushroom: '#9b59b6' };
     return colors[mode] || '#ffd700';
   }
 
@@ -218,6 +219,8 @@
   let colorPickerResult = $state(null);
   let showColorPickerModal = $state(false);
   let loadTimeoutId = null;
+  let loadForceReadyId = null;
+  let toastTimeoutId = null;
 
   function positionOverlay() {
     if (!video || !overlay) return;
@@ -248,6 +251,9 @@
       window.removeEventListener('resize', positionOverlay);
       if (animId) cancelAnimationFrame(animId);
       if (detectTimer) { clearInterval(detectTimer); detectTimer = null; }
+      if (toastTimeoutId) { clearTimeout(toastTimeoutId); toastTimeoutId = null; }
+      if (loadTimeoutId) { clearTimeout(loadTimeoutId); loadTimeoutId = null; }
+      if (loadForceReadyId) { clearTimeout(loadForceReadyId); loadForceReadyId = null; }
       if (currentStream) {
         currentStream.getTracks().forEach(t => t.stop());
         currentStream = null;
@@ -267,7 +273,8 @@
     statusToastMsg = msg;
     statusToastType = type;
     showStatusToast = true;
-    setTimeout(() => { showStatusToast = false; }, 3000);
+    if (toastTimeoutId) clearTimeout(toastTimeoutId);
+    toastTimeoutId = setTimeout(() => { showStatusToast = false; toastTimeoutId = null; }, 3000);
   }
 
   async function saveCurrentScan() {
@@ -364,7 +371,7 @@
       }
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
       currentStream = stream;
-      if (!video) return;
+      if (!video) { status = ''; return; }
       video.srcObject = stream; await video.play();
       await new Promise(r => { if (video.videoWidth > 0) r(); else video.addEventListener('loadeddata', () => r(), { once: true }); });
       await tick();
@@ -562,10 +569,6 @@
     const fc = sampleRegionColor(video, cw * 0.3, ch * 0.3, cw * 0.4, ch * 0.4);
     if (swId !== modeSwitchId) { detecting = false; return; }
     focusColor = fc;
-    focusObj = null;
-    detections = [];
-    objColors = [];
-    detectionsDirty = true;
     if (detecting) detecting = false;
   }
 
@@ -601,15 +604,13 @@
           const modelId = fusionModels[fusionRotationIndex % fusionModels.length];
           fusionRotationIndex++;
           let batchResults;
-          if (modelId === 'coco' || modelId === 'ssdlens') batchResults = await detectTF(frame).catch(() => []);
+          if (modelId === 'coco') batchResults = await detectTF(frame).catch(() => []);
           else batchResults = await detectMobileNet(frame, modelId).catch(() => []);
           for (const r of batchResults) { r._fusionModel = modelId; r.ts = now; allFusionResults.push(r); }
         }
-        results = allFusionResults;
+        results = dedupDetections(allFusionResults);
       } else if (mk) {
         results = await detectMobileNet(frame, mk).catch(() => []);
-      } else if (engineMode === 'ssdlens') {
-        results = await detectTF(frame).catch(() => []);
       } else {
         results = await detectTF(frame).catch(() => []);
       }
@@ -769,16 +770,21 @@
 
   let frameTick = 0;
 
-  function applyCVDSimulation(ctx, cw, ch) {
-    const imageData = ctx.getImageData(0, 0, cw, ch);
-    const d = imageData.data;
-    for (let i = 0; i < d.length; i += 4) {
-      const r = d[i], g = d[i + 1], b = d[i + 2];
-      d[i] = Math.min(255, 0.567 * r + 0.433 * g);
-      d[i + 1] = Math.min(255, 0.558 * r + 0.442 * g);
-      d[i + 2] = Math.min(255, 0.242 * g + 0.758 * b);
+  function dedupDetections(dets) {
+    const iou = (a, b) => {
+      const x1 = Math.max(a.x1, b.x1), y1 = Math.max(a.y1, b.y1);
+      const x2 = Math.min(a.x2, b.x2), y2 = Math.min(a.y2, b.y2);
+      const i = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+      const u = (a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - i;
+      return u > 0 ? i / u : 0;
+    };
+    const kept = [];
+    for (const d of dets) {
+      if (!kept.some(k => k.label === d.label && iou(k, d) > 0.5)) {
+        kept.push(d);
+      }
     }
-    ctx.putImageData(imageData, 0, 0);
+    return kept;
   }
 
   function drawFrame(preds, focus, cw, ch, colors = [], ctx, _focusColor = null) {

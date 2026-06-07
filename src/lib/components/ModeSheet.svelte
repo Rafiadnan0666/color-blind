@@ -6,7 +6,6 @@
   const modes = [
     { id: 'fusion', icon: 'fa-compress-alt', label: 'Fusion', desc: 'All engines combined' },
     { id: 'coco', icon: 'fa-globe', label: 'COCO', desc: '90-class general objects' },
-    { id: 'ssdlens', icon: 'fa-apple-alt', label: 'Objects', desc: 'General object detection' },
     { id: 'currency', icon: 'fa-money-bill-wave', label: 'Currency', desc: '7 rupiah notes' },
     { id: 'drug', icon: 'fa-pills', label: 'Medicine', desc: 'Medicine detection (paracetamol, panadol, amoxicillin, vitamin C)' },
     { id: 'traffic_light', icon: 'fa-traffic-light', label: 'Traffic', desc: 'Red, green, yellow' },
@@ -19,7 +18,6 @@
     const colors = {
       fusion: '#ff3366',
       coco: '#00e5ff',
-      ssdlens: '#39ff14',
       currency: '#ffd700',
       drug: '#ff6b35',
       traffic_light: '#ff0033',

@@ -6,13 +6,6 @@ import {
   getMobileNetColor,
   getMobileNetModelKeys
 } from './mobilenetDetection';
-const CLASS_NAMES = [
-  'ripe_apple', 'unripe_apple', 'ripe_banana', 'unripe_banana',
-  'ripe_orange', 'unripe_orange', 'ripe_strawberry', 'unripe_strawberry',
-  'ripe_tomato', 'unripe_tomato', 'plant', 'other_object',
-];
-let gallery = [];
-let galleryLabels = [];
 function hashColor(str) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -35,7 +28,7 @@ export async function loadMobileNetModelForMode(mode) {
   mobilenetModelsLoaded.add(mode);
   await loadMobileNetModel(mode);
 }
-export { CLASS_NAMES as YOLO_CLASSES };
+
 export async function detectObjects(source) {
   try {
     const results = await detectTF(source);
@@ -61,19 +54,4 @@ export function pickNearestCenter(dets, cw, ch) {
   }
   return best;
 }
-export function getEmbedding() { return null; }
-export function addToGallery(embedding, label) {
-  gallery.push(embedding);
-  galleryLabels.push(label);
-}
-export function searchGallery(queryEmbedding, topK = 5) {
-  if (gallery.length === 0) return [];
-  const scores = gallery.map((emb, i) => {
-    let sim = 0;
-    for (let j = 0; j < queryEmbedding.length; j++) sim += queryEmbedding[j] * emb[j];
-    return { index: i, score: sim, label: galleryLabels[i] };
-  });
-  scores.sort((a, b) => b.score - a.score);
-  return scores.slice(0, topK);
-}
-export function getGallerySize() { return gallery.length; }
+
