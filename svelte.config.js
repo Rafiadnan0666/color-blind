@@ -6,11 +6,7 @@ const config = {
   kit: {
     adapter: adapter({
       runtime: 'nodejs22.x'
-    }),
-    headers: {
-      'Cross-Origin-Opener-Policy': 'same-origin',
-      'Cross-Origin-Embedder-Policy': 'credentialless',
-    }
+    })
   }
 };
 
