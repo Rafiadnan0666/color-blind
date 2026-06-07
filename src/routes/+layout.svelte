@@ -35,16 +35,31 @@
     }
   });
 
-  $effect(() => {
-    const t = $theme;
-    if (typeof document !== 'undefined') {
-      const cl = document.documentElement.classList;
-      ['theme-light','theme-dark','theme-system','theme-grey'].forEach(c => cl.remove(c));
-      if (t === 'dark') cl.add('theme-dark');
-      else if (t === 'light') cl.add('theme-light');
-      else if (t === 'grey') cl.add('theme-grey');
-      else cl.add('theme-system');
+  function applyTheme(t) {
+    if (typeof document === 'undefined') return;
+    const cl = document.documentElement.classList;
+    cl.remove('theme-light', 'theme-dark', 'theme-system', 'theme-grey');
+    if (t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      cl.add('theme-dark');
+    } else if (t === 'grey') {
+      cl.add('theme-grey');
+    } else if (t === 'light' || (t === 'system' && window.matchMedia('(prefers-color-scheme: light)').matches)) {
+      cl.add('theme-light');
+    } else {
+      cl.add('theme-light');
     }
+  }
+
+  $effect(() => {
+    applyTheme($theme);
+  });
+
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = () => { if ($theme === 'system') applyTheme('system'); };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
   });
 
   function cycleTheme() {
@@ -54,14 +69,7 @@
     const next = order[(idx + 1) % order.length];
     rawSettings.update(s => ({ ...s, preferredtheme: next }));
     userSettings.upsert({ preferredtheme: next }).catch(() => {});
-    if (browser) {
-      const cl = document.documentElement.classList;
-      ['theme-light','theme-dark','theme-system','theme-grey'].forEach(c => cl.remove(c));
-      if (next === 'dark') cl.add('theme-dark');
-      else if (next === 'light') cl.add('theme-light');
-      else if (next === 'grey') cl.add('theme-grey');
-      else cl.add('theme-system');
-    }
+    applyTheme(next);
   }
 
   function getThemeIcon(t) {

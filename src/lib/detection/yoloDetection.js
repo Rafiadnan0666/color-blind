@@ -73,8 +73,14 @@ export async function loadYoloModel(modelKey = 'accessibility') {
   const cfg = getModelCfg(modelKey);
   if (!cfg) { console.warn(`YOLO[${modelKey}]: unknown model`); return; }
   try {
+    let ep = ['wasm'];
+    try {
+      if (typeof ort.env !== 'undefined' && ort.env.wasm) {
+        ort.env.wasm.wasmPaths = '/wasm/';
+      }
+    } catch (_) {}
     sessions[modelKey] = await ort.InferenceSession.create(cfg.path, {
-      executionProviders: ['wasm', 'webgl'],
+      executionProviders: ep,
       graphOptimizationLevel: 'all',
     });
   } catch (e) {
@@ -165,6 +171,7 @@ function decodeDetections(output, classNames, inputSize) {
   const numClasses = classNames.length;
   const data = output.data;
   const dims = output.dims;
+  if (!data || !dims || dims.length < 2) return [];
   const dets = [];
   let numDetections, stride, bboxOffset;
   if (dims.length === 3 && dims[0] === 1) {
@@ -176,30 +183,50 @@ function decodeDetections(output, classNames, inputSize) {
       numDetections = dims[1];
       stride = dims[2];
       bboxOffset = 0;
+    } else if (dims[1] === 4 + numClasses) {
+      numDetections = dims[2];
+      stride = numDetections;
+      bboxOffset = 0;
+    } else if (dims[2] === 4 + numClasses) {
+      numDetections = dims[1];
+      stride = dims[2];
+      bboxOffset = 0;
     } else {
       return [];
     }
   } else if (dims.length === 2 && dims[0] === 1) {
-    numDetections = dims[1];
-    stride = numClasses + 4;
+    const totalCols = dims[1];
+    const expectedCols = numClasses + 4;
+    if (totalCols % expectedCols === 0) {
+      numDetections = totalCols / expectedCols;
+      stride = expectedCols;
+    } else {
+      return [];
+    }
   } else {
     return [];
   }
+  const totalVals = numDetections * stride;
   for (let i = 0; i < numDetections; i++) {
-    const cx = data[bboxOffset + i];
-    const cy = data[bboxOffset + 1 * stride + i];
-    const w = data[bboxOffset + 2 * stride + i];
-    const h = data[bboxOffset + 3 * stride + i];
+    const idx = bboxOffset + i;
+    if (idx >= totalVals) break;
+    const cx = data[idx] || 0;
+    const cy = data[bboxOffset + 1 * stride + i] || 0;
+    const w = data[bboxOffset + 2 * stride + i] || 0;
+    const h = data[bboxOffset + 3 * stride + i] || 0;
+    if (w <= 0 || h <= 0) continue;
     let maxScore = 0, bestClass = -1;
     for (let c = 0; c < numClasses; c++) {
-      const score = sigmoid(data[bboxOffset + (4 + c) * stride + i]);
+      const ci = bboxOffset + (4 + c) * stride + i;
+      const score = ci < totalVals ? sigmoid(data[ci]) : 0;
       if (score > maxScore) { maxScore = score; bestClass = c; }
     }
-    if (maxScore < CONF_THRESHOLD) continue;
+    if (maxScore < CONF_THRESHOLD || bestClass < 0) continue;
     const x1 = Math.max(0, (cx - w / 2 - _padX) / _scaleX);
     const y1 = Math.max(0, (cy - h / 2 - _padY) / _scaleX);
     const x2 = Math.min(_origW, (cx + w / 2 - _padX) / _scaleX);
     const y2 = Math.min(_origH, (cy + h / 2 - _padY) / _scaleX);
+    if (x2 <= x1 || y2 <= y1) continue;
     dets.push({ x1, y1, x2, y2, width: x2 - x1, height: y2 - y1, score: maxScore, classId: bestClass, label: classNames[bestClass], model: 'yolo' });
   }
   dets.sort((a, b) => b.score - a.score);
@@ -224,46 +251,62 @@ export async function detectYolo(source, modelKey = 'accessibility') {
   const cfg = getModelCfg(modelKey);
   if (!cfg) { console.warn(`YOLO[${modelKey}]: unknown model config`); return []; }
   const session = sessions[modelKey];
-  if (cfg.isClassifier) {
-    return classifyImage(source, modelKey, cfg, session);
+  if (!session) return [];
+  try {
+    if (cfg.isClassifier) {
+      return classifyImage(source, modelKey, cfg, session);
+    }
+    const t = preprocessDetect(source, cfg.inputSize);
+    const feeds = { [session.inputNames[0]]: t };
+    const results = await session.run(feeds);
+    if (!results || !session.outputNames || !session.outputNames[0]) return [];
+    const output = results[session.outputNames[0]];
+    if (!output) return [];
+    const dets = decodeDetections(output, cfg.classes, cfg.inputSize);
+    for (const d of dets) {
+      d.label = DISPLAY_NAMES[d.label] || d.label;
+    }
+    return dets;
+  } catch (e) {
+    console.error(`YOLO[${modelKey}] detect error:`, e?.message || e);
+    return [];
   }
-  const t = preprocessDetect(source, cfg.inputSize);
-  const feeds = { [session.inputNames[0]]: t };
-  const results = await session.run(feeds);
-  const output = results[session.outputNames[0]];
-  const dets = decodeDetections(output, cfg.classes, cfg.inputSize);
-  for (const d of dets) {
-    d.label = DISPLAY_NAMES[d.label] || d.label;
-  }
-  return dets;
 }
 async function classifyImage(source, modelKey, cfg, session) {
-  const t = preprocessClassify(source, cfg.inputSize);
-  const feeds = { [session.inputNames[0]]: t };
-  const results = await session.run(feeds);
-  const output = results[session.outputNames[0]];
-  const probs = softmax(Array.from(output.data));
-  const bestIdx = probs.indexOf(Math.max(...probs));
-  const score = probs[bestIdx];
-  const label = cfg.classes[bestIdx];
-  if (score < 0.05) return [];
-  const size = Math.min(_origW, _origH);
-  const ox = Math.round((_origW - size) / 2);
-  const oy = Math.round((_origH - size) / 2);
-  const margin = 0.1;
-  return [{
-    x1: ox + size * margin,
-    y1: oy + size * margin,
-    x2: ox + size * (1 - margin),
-    y2: oy + size * (1 - margin),
-    width: size * (1 - 2 * margin),
-    height: size * (1 - 2 * margin),
-    score,
-    classId: bestIdx,
-    label: DISPLAY_NAMES[label] || label,
-    model: 'yolo',
-    isClassifier: true,
-  }];
+  try {
+    const t = preprocessClassify(source, cfg.inputSize);
+    const feeds = { [session.inputNames[0]]: t };
+    const results = await session.run(feeds);
+    if (!results || !session.outputNames?.[0]) return [];
+    const output = results[session.outputNames[0]];
+    if (!output || !output.data) return [];
+    const probs = softmax(Array.from(output.data));
+    const bestIdx = probs.indexOf(Math.max(...probs));
+    if (bestIdx < 0 || bestIdx >= cfg.classes.length) return [];
+    const score = probs[bestIdx];
+    const label = cfg.classes[bestIdx];
+    if (score < 0.05) return [];
+    const size = Math.min(_origW, _origH);
+    const ox = Math.round((_origW - size) / 2);
+    const oy = Math.round((_origH - size) / 2);
+    const margin = 0.1;
+    return [{
+      x1: ox + size * margin,
+      y1: oy + size * margin,
+      x2: ox + size * (1 - margin),
+      y2: oy + size * (1 - margin),
+      width: size * (1 - 2 * margin),
+      height: size * (1 - 2 * margin),
+      score,
+      classId: bestIdx,
+      label: DISPLAY_NAMES[label] || label,
+      model: 'yolo',
+      isClassifier: true,
+    }];
+  } catch (e) {
+    console.error(`Classify[${modelKey}] error:`, e?.message || e);
+    return [];
+  }
 }
 export function getYoloColor(label) {
   for (const cfg of Object.values(MODELS)) {

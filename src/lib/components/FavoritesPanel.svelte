@@ -88,9 +88,7 @@
 </div>
 
 <style>
-  .favorites-panel {
-    padding: 1rem;
-  }
+  .favorites-panel { padding: 1rem; }
 
   .panel-header {
     display: flex;
@@ -98,7 +96,7 @@
     justify-content: space-between;
     margin-bottom: 1rem;
     padding-bottom: 0.75rem;
-    border-bottom: 3px solid #0a0a0a;
+    border-bottom: 3px solid var(--color-border-primary, #0a0a0a);
   }
 
   .empty-state {
@@ -110,11 +108,7 @@
     text-align: center;
   }
 
-  .items-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-  }
+  .items-list { display: flex; flex-direction: column; gap: 0.35rem; }
 
   .fav-item {
     display: flex;
@@ -125,21 +119,18 @@
     transition: all 0.15s;
   }
   .fav-item:hover {
-    border-color: #0a0a0a;
+    border-color: var(--color-border-primary, #0a0a0a);
     background: #ffd70008;
   }
 
   .fav-color {
     width: 36px;
     height: 36px;
-    border: 3px solid #0a0a0a;
+    border: 3px solid var(--color-border-primary, #0a0a0a);
     flex-shrink: 0;
   }
 
-  .fav-info {
-    flex: 1;
-    min-width: 0;
-  }
+  .fav-info { flex: 1; min-width: 0; }
 
   .fav-delete {
     border: none;

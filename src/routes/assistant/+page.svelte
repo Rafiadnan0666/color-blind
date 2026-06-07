@@ -42,7 +42,7 @@
 
   async function initAI() {
     try {
-      const LM =  (self).LanguageModel;
+      const LM = /** @type {any} */ (self).LanguageModel;
       if (LM) {
         const opts = { expectedOutputs: [{ type: 'text', languages: ['en'] }] };
         const avail = await LM.availability(opts);

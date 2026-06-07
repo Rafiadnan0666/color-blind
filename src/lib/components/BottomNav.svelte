@@ -44,12 +44,12 @@
     right: 0;
     height: calc(60px + env(safe-area-inset-bottom, 0px));
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    background: #fefefe;
-    border-top: 4px solid #0a0a0a;
+    background: var(--color-bg-primary, #fefefe);
+    border-top: 4px solid var(--color-border-primary, #0a0a0a);
     display: flex;
     align-items: stretch;
     z-index: 250;
-    box-shadow: 0 -4px 0 #0a0a0a;
+    box-shadow: 0 -4px 0 var(--color-shadow, #0a0a0a);
   }
 
   .nav-item {
@@ -67,11 +67,11 @@
     border-top: 3px solid transparent;
     margin-top: -3px;
     position: relative;
-    color: #888;
+    color: var(--color-text-secondary, #888);
   }
 
   .nav-item.active {
-    color: #0a0a0a;
+    color: var(--color-text-primary, #0a0a0a);
     border-top-color: #ffd700;
     background: #ffd70010;
   }

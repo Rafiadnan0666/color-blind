@@ -57,7 +57,7 @@ export async function loadMobileNetModel(modelKey = 'currency') {
     await loadYoloModel(modelKey);
     sessions[modelKey] = { __yolo: true, modelKey };
   } catch (e2) {
-    console.error(`[MODEL_LOAD_ERROR] ONNX YOLO failed for [${modelKey}]:`, e2?.message || e2);
+    console.error(`[MODEL_LOAD_ERROR] ONNX failed for [${modelKey}]:`, e2?.message || e2);
   }
 }
 
