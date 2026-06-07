@@ -1,62 +1,61 @@
 {
-	"name": "color-blind",
-	"version": "0.0.1",
-	"scripts": {
-		"dev": "vite dev",
-		"build": "vite build && npm run prepack",
-		"preview": "vite preview",
-		"prepare": "svelte-kit sync || echo ''",
-		"prepack": "svelte-kit sync && svelte-package && publint",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
-		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json --watch"
-	},
-	"files": [
-		"dist",
-		"!dist/**/*.test.*",
-		"!dist/**/*.spec.*"
-	],
-	"sideEffects": [
-		"**/*.css"
-	],
-	"svelte": "./dist/index.js",
-	"types": "./dist/index.d.ts",
-	"type": "module",
-	"exports": {
-		".": {
-			"types": "./dist/index.d.ts",
-			"svelte": "./dist/index.js"
-		}
-	},
-	"peerDependencies": {
-		"svelte": "^5.0.0"
-	},
-	"devDependencies": {
-		"@sveltejs/adapter-auto": "^7.0.1",
-		"@sveltejs/adapter-vercel": "^6.3.3",
-		"@sveltejs/kit": "^2.57.0",
-		"@sveltejs/package": "^2.5.7",
-		"@sveltejs/vite-plugin-svelte": "^7.0.0",
-		"@types/node": "^25.9.1",
-		"autoprefixer": "^10.5.0",
-		"postcss": "^8.5.15",
-		"publint": "^0.3.18",
-		"svelte": "^5.55.2",
-		"svelte-check": "^4.4.6",
-		"tailwindcss": "^3.4.19",
-		"typescript": "^6.0.2",
-		"vite": "^8.0.7"
-	},
-	"keywords": [
-		"svelte"
-	],
-	"dependencies": {
-		"@supabase/ssr": "^0.10.3",
-		"@supabase/supabase-js": "^2.106.2",
-		"@tensorflow-models/coco-ssd": "^2.2.3",
-		"@tensorflow-models/qna": "^1.0.2",
-		"@tensorflow/tfjs": "^4.22.0",
-		"@tensorflow/tfjs-backend-webgl": "^4.22.0",
-		"onnxruntime-web": "^1.26.0",
-		"tesseract.js": "^6.0.1"
-	}
+  "name": "color-blind",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "svelte-kit sync || echo ''",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json --watch"
+  },
+  "files": [
+    "dist",
+    "!dist/**/*.test.*",
+    "!dist/**/*.spec.*"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "svelte": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js"
+    }
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-auto": "^7.0.1",
+    "@sveltejs/adapter-vercel": "^6.3.3",
+    "@sveltejs/kit": "^2.57.0",
+    "@sveltejs/package": "^2.5.7",
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@types/node": "^25.9.1",
+    "autoprefixer": "^10.5.0",
+    "postcss": "^8.5.15",
+    "publint": "^0.3.18",
+    "svelte": "^5.55.2",
+    "svelte-check": "^4.4.6",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^6.0.2",
+    "vite": "^8.0.7"
+  },
+  "keywords": [
+    "svelte"
+  ],
+  "dependencies": {
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.106.2",
+    "@tensorflow-models/coco-ssd": "^2.2.3",
+    "@tensorflow-models/qna": "^1.0.2",
+    "@tensorflow/tfjs": "^4.22.0",
+    "@tensorflow/tfjs-backend-webgl": "^4.22.0",
+    "onnxruntime-web": "^1.26.0",
+    "tesseract.js": "^6.0.1"
+  }
 }
