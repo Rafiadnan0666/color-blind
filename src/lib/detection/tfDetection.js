@@ -1,5 +1,5 @@
-import * as tf from '@tensorflow/tfjs-core';
-import '@tensorflow/tfjs-backend-cpu';
+import * as tf from '@tensorflow/tfjs';
+import '@tensorflow/tfjs-backend-webgl';
 
 const COCO_CLASSES = [
   'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat',
@@ -17,40 +17,27 @@ const COCO_CLASSES = [
 let model = null;
 let loadAttempted = false;
 
-async function initBackend() {
-  // Try WebGL first via dynamic import so it doesn't crash at module load time
-  try {
-    await import('@tensorflow/tfjs-backend-webgl');
-    await tf.setBackend('webgl');
-    await tf.ready();
-    console.log('[TF] Backend: webgl');
-    return;
-  } catch (e) {
-    console.warn('[TF] WebGL failed, falling back to CPU:', e?.message);
-  }
-  // CPU fallback
-  try {
-    await tf.setBackend('cpu');
-    await tf.ready();
-    console.log('[TF] Backend: cpu');
-  } catch (e) {
-    console.error('[TF] CPU backend also failed:', e?.message);
-  }
-}
-
 export async function loadTFModel() {
   if (model) return model;
-  if (loadAttempted) return model ?? null;
+  if (loadAttempted) {
+    if (model) return model;
+    return null;
+  }
   loadAttempted = true;
   try {
-    await initBackend();
+    await tf.ready();
     const cocoSsd = await import('@tensorflow-models/coco-ssd');
-    // @ts-ignore
-    model = await cocoSsd.load({ scoreThreshold: 0.25, maxNumBoxes: 30 }).catch(() => null);
-    // @ts-ignore
-    if (!model) model = await cocoSsd.load({ scoreThreshold: 0.2, maxNumBoxes: 40 }).catch(() => null);
-    if (!model) model = await cocoSsd.load({}).catch(() => null);
-    console.log('[TF] COCO-SSD loaded:', !!model);
+    const loadWithConfig = async (config) => {
+      try {
+        return await cocoSsd.load(config);
+      } catch (e) {
+        console.warn(`[TF_MODEL] COCO-SSD config (${JSON.stringify(config)}) failed:`, e?.message);
+        return null;
+      }
+    };
+    model = await loadWithConfig({ scoreThreshold: 0.25, maxNumBoxes: 30 });
+    if (!model) model = await loadWithConfig({ scoreThreshold: 0.2, maxNumBoxes: 40 });
+    if (!model) model = await loadWithConfig({});
     return model;
   } catch (e) {
     console.error('[TF_MODEL_ERROR]', e?.message || e);
@@ -63,17 +50,14 @@ export async function detectTF(source) {
     await loadTFModel();
     if (!model) return [];
   }
+  if (!model) return [];
   try {
     const predictions = await model.detect(source, 40);
     if (!predictions || !Array.isArray(predictions)) return [];
     return predictions.map((p) => ({
-      x1: p.bbox[0], y1: p.bbox[1],
-      x2: p.bbox[0] + p.bbox[2], y2: p.bbox[1] + p.bbox[3],
-      width: p.bbox[2], height: p.bbox[3],
-      score: p.score,
-      classId: COCO_CLASSES.indexOf(p.class),
-      label: p.class,
-      model: 'coco-ssd',
+      x1: p.bbox[0], y1: p.bbox[1], x2: p.bbox[0] + p.bbox[2], y2: p.bbox[1] + p.bbox[3],
+      width: p.bbox[2], height: p.bbox[3], score: p.score, classId: COCO_CLASSES.indexOf(p.class),
+      label: p.class, model: 'coco-ssd',
     }));
   } catch (e) {
     console.error('COCO-SSD detect error:', e);
