@@ -56,7 +56,7 @@ const MODELS = {
     colors: { 'Autumn Skullcap': '#8B4513', 'Death Cap': '#ff0033', 'Destroying Angels': '#ffd700', 'False Morel': '#ff6b35', 'Poison Fire Coral': '#ff3366' },
   },
 };
-const CONF_THRESHOLD = 0.25;
+const CONF_THRESHOLD = 0.5;
 const IOU_THRESHOLD = 0.45;
 let sessions = {};
 let loadAttempted = {};
@@ -209,10 +209,10 @@ function decodeDetections(output, classNames, inputSize) {
   } else {
     return [];
   }
-  const totalVals = numDetections * stride;
+  const totalVals = data.length;
   for (let i = 0; i < numDetections; i++) {
     const idx = bboxOffset + i;
-    if (idx >= totalVals) break;
+    if (idx + 3 * stride + i >= totalVals) break;
     const cx = data[idx] || 0;
     const cy = data[bboxOffset + 1 * stride + i] || 0;
     const w = data[bboxOffset + 2 * stride + i] || 0;
@@ -238,7 +238,7 @@ function decodeDetections(output, classNames, inputSize) {
     const b = dets.shift();
     keep.push(b);
     for (let i = dets.length - 1; i >= 0; i--) {
-      if (iou(b, dets[i]) >= IOU_THRESHOLD) dets.splice(i, 1);
+      if (b.classId === dets[i].classId && iou(b, dets[i]) >= IOU_THRESHOLD) dets.splice(i, 1);
     }
   }
   return keep;
