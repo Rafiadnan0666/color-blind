@@ -9,11 +9,6 @@
 		"prepack": "svelte-kit sync && svelte-package && publint",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json --watch",
-		"db:generate": "prisma generate",
-		"db:push": "prisma db push",
-		"db:studio": "prisma studio",
-		"db:migrate": "prisma migrate dev",
-		"postinstall": "prisma generate"
 	},
 	"files": [
 		"dist",
@@ -43,7 +38,6 @@
 		"@types/node": "^25.9.1",
 		"autoprefixer": "^10.5.0",
 		"postcss": "^8.5.15",
-		"prisma": "^6.19.3",
 		"publint": "^0.3.18",
 		"svelte": "^5.55.2",
 		"svelte-check": "^4.4.6",
@@ -55,7 +49,6 @@
 		"svelte"
 	],
 	"dependencies": {
-		"@prisma/client": "^7.8.0",
 		"@supabase/ssr": "^0.10.3",
 		"@supabase/supabase-js": "^2.106.2",
 		"@tensorflow-models/coco-ssd": "^2.2.3",
