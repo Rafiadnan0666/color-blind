@@ -1,4 +1,10 @@
 import * as ort from 'onnxruntime-web';
+
+// Disable threading if SharedArrayBuffer is not available
+if (typeof SharedArrayBuffer === 'undefined') {
+  ort.env.wasm.numThreads = 1;
+}
+
 ort.env.wasm.wasmPaths = '/wasm/';
 function hashColor(str) {
   let hash = 0;
@@ -329,4 +335,4 @@ export function getYoloModelKeys() {
 export function isClassifierModel(modelKey) {
   const cfg = getModelCfg(modelKey);
   return cfg ? cfg.isClassifier : false;
-}
+}
