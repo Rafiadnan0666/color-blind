@@ -11,6 +11,8 @@
     { id: 'drug', icon: 'fa-pills', label: 'Drug', desc: 'Drug detection' },
     { id: 'traffic_light', icon: 'fa-traffic-light', label: 'Traffic', desc: 'Red, green, yellow' },
     { id: 'accessibility', icon: 'fa-universal-access', label: 'Access', desc: 'Road signs' },
+    { id: 'meat', icon: 'fa-drumstick-bite', label: 'Meat', desc: 'Meat freshness' },
+    { id: 'mushroom', icon: 'fa-seedling', label: 'Mushroom', desc: 'Mushroom toxicity' },
   ];
 
   function getEngineColor(modeId) {
@@ -22,6 +24,8 @@
       drug: '#ff6b35',
       traffic_light: '#ff0033',
       accessibility: '#00e5ff',
+      meat: '#ff6b6b',
+      mushroom: '#9b59b6',
     };
     return colors[modeId] || '#ffd700';
   }

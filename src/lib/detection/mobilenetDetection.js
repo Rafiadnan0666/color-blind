@@ -29,6 +29,20 @@ const MODELS = {
     displayNames: { traffic_light_red: 'Red Light', traffic_light_green: 'Green Light', traffic_light_yellow: 'Yellow Light' },
     useYolo: true,
   },
+  meat: {
+    path: '/models/meat_freshness_classifier.onnx',
+    classes: ['Fresh', 'Half-Fresh', 'Spoiled'],
+    colors: { Fresh: '#39ff14', 'Half-Fresh': '#ffd700', Spoiled: '#ff0033' },
+    displayNames: { Fresh: 'Fresh', 'Half-Fresh': 'Half-Fresh', Spoiled: 'Spoiled' },
+    useYolo: true,
+  },
+  mushroom: {
+    path: '/models/mushroom_classifier.onnx',
+    classes: ['Autumn Skullcap', 'Death Cap', 'Destroying Angels', 'False Morel', 'Poison Fire Coral'],
+    colors: { 'Autumn Skullcap': '#8B4513', 'Death Cap': '#ff0033', 'Destroying Angels': '#ffd700', 'False Morel': '#ff6b35', 'Poison Fire Coral': '#ff3366' },
+    displayNames: { 'Autumn Skullcap': 'Autumn Skullcap', 'Death Cap': 'Death Cap', 'Destroying Angels': 'Destroying Angels', 'False Morel': 'False Morel', 'Poison Fire Coral': 'Poison Fire Coral' },
+    useYolo: true,
+  },
 };
 
 let sessions = {};

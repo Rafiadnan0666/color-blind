@@ -163,7 +163,12 @@
   ];
 
   const CVD_MODES = ['none', 'protanopia', 'deuteranopia', 'tritanopia'];
-  const THEMES = ['system', 'light', 'dark', 'high-contrast'];
+  const THEMES = [
+    { value: 'system', label: 'System' },
+    { value: 'light', label: 'Light' },
+    { value: 'dark', label: 'Dark' },
+    { value: 'grey', label: 'Grey' },
+  ];
   const PERF_MODES = [
     { value: 'performance', label: 'Performance', desc: 'Max speed' },
     { value: 'balanced', label: 'Balanced', desc: 'Good speed & quality' },
@@ -277,20 +282,11 @@
             <span class="field-value">{editVoiceEnabled ? 'On' : 'Off'}</span>
           {/if}
         </div>
-        <div class="field-row">
-          <span class="field-label">High Contrast</span>
-          {#if editing}
-            <button class="toggle" class:on={editHighContrast} onclick={() => editHighContrast = !editHighContrast} aria-label="Toggle high contrast">
-              <div class="toggle-knob"></div>
-            </button>
-          {:else}
-            <span class="field-value">{editHighContrast ? 'On' : 'Off'}</span>
-          {/if}
-        </div>
+
       </div>
       {#if editing}
         <div class="flex gap-2 mt-3">
-          <button class="brut-btn-primary text-brut-xs px-4 py-2 flex-1" onclick={saveProfile} disabled={saving}>
+          <button class="brut-btn text-brut-xs px-4 py-2 flex-1" onclick={saveProfile} disabled={saving}>
             {saving ? 'Saving...' : 'Save All'}
           </button>
           <button class="brut-btn text-brut-xs px-4 py-2" onclick={() => editing = false}>Cancel</button>
@@ -331,13 +327,11 @@
       <div class="settings-list">
         <div class="setting-row">
           <span class="font-brut text-brut-xs uppercase">Theme</span>
-          <select class="brut-input text-brut-xs" bind:value={editTheme}>
-            {#each THEMES as t}<option value={t}>{t}</option>{/each}
-          </select>
-        </div>
-        <div class="setting-row">
-          <span class="font-brut text-brut-xs uppercase">High Contrast</span>
-          <button class="toggle" class:on={editHighContrast} onclick={() => editHighContrast = !editHighContrast} aria-label="Toggle high contrast"><div class="toggle-knob"></div></button>
+          <div class="cvd-select">
+            {#each THEMES as t}
+              <button class="cvd-option" class:active={editTheme === t.value} onclick={() => editTheme = t.value}>{t.label}</button>
+            {/each}
+          </div>
         </div>
       </div>
     </div>
@@ -345,9 +339,9 @@
     <div class="brut-card">
       <div class="font-brut text-brut-sm uppercase mb-3"><i class="fas fa-bolt mr-2 text-neo-pink"></i> Performance</div>
       <div class="settings-list">
-        <div class="perf-options">
+        <div class="cvd-select">
           {#each PERF_MODES as m}
-            <button class="perf-option" class:active={editPerfMode === m.value} onclick={() => editPerfMode = m.value}>
+            <button class="cvd-option" class:active={editPerfMode === m.value} onclick={() => editPerfMode = m.value}>
               <span class="font-brut text-brut-xs">{m.label}</span>
               <span class="text-brut-xs text-neo-darkgray">{m.desc}</span>
             </button>
@@ -370,7 +364,7 @@
       </div>
     </div>
 
-    <button class="brut-btn-primary text-brut-xs px-4 py-2 w-full mt-1" onclick={saveProfile} disabled={saving}>
+    <button class="brut-btn text-brut-xs px-4 py-2 w-full mt-1" onclick={saveProfile} disabled={saving}>
       {saving ? 'Saving...' : 'Save Settings'}
     </button>
   {/if}
@@ -387,7 +381,7 @@
           {/each}
         </div>
         <textarea class="brut-input text-brut-sm mb-2" rows="3" placeholder="Share your thoughts..." bind:value={fbMsg}></textarea>
-        <button class="brut-btn-primary text-brut-xs px-4 py-2 w-full" onclick={sendFeedback} disabled={fbSending || !fbMsg}>
+        <button class="brut-btn text-brut-xs px-4 py-2 w-full" onclick={sendFeedback} disabled={fbSending || !fbMsg}>
           {fbSending ? 'Sending...' : 'Send Feedback'}
         </button>
       {/if}
@@ -403,10 +397,11 @@
         <a href="/saved-colors" class="link-item"><i class="fas fa-palette"></i><span>Saved Colors</span><i class="fas fa-chevron-right"></i></a>
         <a href="/saved-objects" class="link-item"><i class="fas fa-cube"></i><span>Saved Objects</span><i class="fas fa-chevron-right"></i></a>
         <a href="/notifications" class="link-item"><i class="fas fa-bell"></i><span>Notifications</span><i class="fas fa-chevron-right"></i></a>
+        <button class="link-item w-full text-left" onclick={() => { if (typeof localStorage !== 'undefined') localStorage.removeItem('clrblind_tour_completed'); goto('/detects'); }}><i class="fas fa-map-signs"></i><span>Restart Tour</span><i class="fas fa-chevron-right"></i></button>
       </div>
     </div>
     <div class="brut-card">
-      <button class="brut-btn-danger text-brut-xs px-4 py-2 w-full" onclick={handleSignOut}>
+      <button class="brut-btn text-brut-xs px-4 py-2 w-full" onclick={handleSignOut}>
         <i class="fas fa-right-from-bracket mr-2"></i> Logout
       </button>
     </div>
@@ -436,10 +431,7 @@
   .toggle.on { background: #39ff14; }
   .toggle-knob { position: absolute; top: 1px; left: 1px; width: 18px; height: 18px; background: #fefefe; border: 2px solid #0a0a0a; transition: left 0.2s; }
   .toggle.on .toggle-knob { left: 25px; }
-  .perf-options { display: flex; gap: 0.35rem; }
-  .perf-option { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.15rem; padding: 0.5rem; border: 2px solid #0a0a0a; background: #fefefe; cursor: pointer; transition: all 0.15s; }
-  .perf-option.active { background: #ffd700; box-shadow: 2px 2px 0 #0a0a0a; }
-  .perf-option:hover { background: #ffd70044; }
+
   .links-list { display: flex; flex-direction: column; gap: 0.25rem; }
   .link-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; border: 2px solid transparent; color: #0a0a0a; text-decoration: none; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; transition: all 0.15s; }
   .link-item:hover { border-color: #0a0a0a; background: #ffd70008; }

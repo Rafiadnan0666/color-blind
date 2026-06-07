@@ -93,7 +93,7 @@
               <div class="font-brut text-brut-xs text-neo-darkgray uppercase">Voice</div>
             </div>
           </div>
-          <a href="/profile" class="brut-btn-primary text-center w-full">
+          <a href="/profile" class="brut-btn text-center w-full">
             <i class="fas fa-cog mr-2"></i> Profile Settings
           </a>
         </div>
@@ -122,9 +122,9 @@
             </p>
           </div>
         </div>
-        <a href="/detects" class="brut-btn-primary inline-block mt-4">
-          Start Detecting
-        </a>
+          <a href="/detects" class="brut-btn inline-block mt-4">
+            Start Detecting
+          </a>
       </div>
 
       <div class="brut-card border-3 border-neo-black bg-purple-100 hover:shadow-brut-lg transition-all">

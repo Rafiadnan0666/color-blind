@@ -41,6 +41,20 @@ const MODELS = {
     isClassifier: false,
     colors: { traffic_light_red: '#ff0033', traffic_light_green: '#00cc44', traffic_light_yellow: '#ffcc00' },
   },
+  meat: {
+    path: '/models/meat_freshness_classifier.onnx',
+    classes: ['Fresh', 'Half-Fresh', 'Spoiled'],
+    inputSize: 224,
+    isClassifier: true,
+    colors: { Fresh: '#39ff14', 'Half-Fresh': '#ffd700', Spoiled: '#ff0033' },
+  },
+  mushroom: {
+    path: '/models/mushroom_classifier.onnx',
+    classes: ['Autumn Skullcap', 'Death Cap', 'Destroying Angels', 'False Morel', 'Poison Fire Coral'],
+    inputSize: 224,
+    isClassifier: true,
+    colors: { 'Autumn Skullcap': '#8B4513', 'Death Cap': '#ff0033', 'Destroying Angels': '#ffd700', 'False Morel': '#ff6b35', 'Poison Fire Coral': '#ff3366' },
+  },
 };
 const CONF_THRESHOLD = 0.25;
 const IOU_THRESHOLD = 0.45;
@@ -123,6 +137,9 @@ function preprocessDetect(source, inputSize) {
   }
   return new ort.Tensor('float32', float32Data, [1, 3, inputSize, inputSize]);
 }
+const IMAGENET_MEAN = [0.485, 0.456, 0.406];
+const IMAGENET_STD = [0.229, 0.224, 0.225];
+
 function preprocessClassify(source, inputSize) {
   const { cvs, srcW, srcH } = captureSource(source);
   _origW = srcW; _origH = srcH;
@@ -138,9 +155,9 @@ function preprocessClassify(source, inputSize) {
   const float32Data = new Float32Array(3 * inputSize * inputSize);
   for (let i = 0; i < inputSize * inputSize; i++) {
     const si = i * 4;
-    float32Data[i] = pixels[si] / 255;
-    float32Data[inputSize * inputSize + i] = pixels[si + 1] / 255;
-    float32Data[2 * inputSize * inputSize + i] = pixels[si + 2] / 255;
+    float32Data[i] = (pixels[si] / 255 - IMAGENET_MEAN[0]) / IMAGENET_STD[0];
+    float32Data[inputSize * inputSize + i] = (pixels[si + 1] / 255 - IMAGENET_MEAN[1]) / IMAGENET_STD[1];
+    float32Data[2 * inputSize * inputSize + i] = (pixels[si + 2] / 255 - IMAGENET_MEAN[2]) / IMAGENET_STD[2];
   }
   return new ort.Tensor('float32', float32Data, [1, 3, inputSize, inputSize]);
 }
@@ -229,7 +246,7 @@ async function classifyImage(source, modelKey, cfg, session) {
   const bestIdx = probs.indexOf(Math.max(...probs));
   const score = probs[bestIdx];
   const label = cfg.classes[bestIdx];
-  if (score < 0.2) return [];
+  if (score < 0.05) return [];
   const size = Math.min(_origW, _origH);
   const ox = Math.round((_origW - size) / 2);
   const oy = Math.round((_origH - size) / 2);

@@ -7,6 +7,7 @@
   import { notifications, setUserId, userProfile, userSettings } from '$lib/supabase/db';
   import { onMount } from 'svelte';
   import { rawSettings, rawProfile, voiceEnabled, notifEnabled, theme, highContrast, avatarUrl, profileName } from '$lib/stores/settings';
+  import { browser } from '$app/environment';
 
   let { children, data } = $props();
 
@@ -36,17 +37,37 @@
 
   $effect(() => {
     const t = $theme;
-    const hc = $highContrast;
     if (typeof document !== 'undefined') {
       const cl = document.documentElement.classList;
-      ['theme-light','theme-dark','theme-system','theme-high-contrast','high-contrast'].forEach(c => cl.remove(c));
+      ['theme-light','theme-dark','theme-system','theme-grey'].forEach(c => cl.remove(c));
       if (t === 'dark') cl.add('theme-dark');
       else if (t === 'light') cl.add('theme-light');
-      else if (t === 'high-contrast') { cl.add('theme-high-contrast'); cl.add('high-contrast'); }
+      else if (t === 'grey') cl.add('theme-grey');
       else cl.add('theme-system');
-      if (hc) cl.add('high-contrast');
     }
   });
+
+  function cycleTheme() {
+    const order = ['system', 'light', 'dark', 'grey'];
+    const current = $theme;
+    const idx = order.indexOf(current);
+    const next = order[(idx + 1) % order.length];
+    rawSettings.update(s => ({ ...s, preferredtheme: next }));
+    userSettings.upsert({ preferredtheme: next }).catch(() => {});
+    if (browser) {
+      const cl = document.documentElement.classList;
+      ['theme-light','theme-dark','theme-system','theme-grey'].forEach(c => cl.remove(c));
+      if (next === 'dark') cl.add('theme-dark');
+      else if (next === 'light') cl.add('theme-light');
+      else if (next === 'grey') cl.add('theme-grey');
+      else cl.add('theme-system');
+    }
+  }
+
+  function getThemeIcon(t) {
+    const icons = { system: 'fa-circle-half-stroke', light: 'fa-sun', dark: 'fa-moon', grey: 'fa-circle' };
+    return icons[t] || 'fa-circle-half-stroke';
+  }
 
   async function loadUnreadCount() {
     try {
@@ -93,6 +114,9 @@
             <a href="/dashboard" class="brut-nav-link" class:brut-nav-link-active={isActive('/dashboard')}>
               Dashboard
             </a>
+            <button class="brut-btn text-sm px-2 py-1.5" onclick={cycleTheme} title="Theme: {$theme}" aria-label="Toggle theme">
+              <i class="fas {getThemeIcon($theme)}"></i>
+            </button>
             <span class="w-px h-6 bg-neo-black"></span>
             <div class="flex items-center gap-2 ml-2">
             {#if $avatarUrl && !avatarError}

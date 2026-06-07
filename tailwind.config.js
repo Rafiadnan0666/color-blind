@@ -5,16 +5,16 @@ export default {
     extend: {
       colors: {
         neo: {
-          black: '#0a0a0a',
-          white: '#fefefe',
+          black: 'var(--color-neo-black, #0a0a0a)',
+          white: 'var(--color-neo-white, #fefefe)',
           yellow: '#ffd700',
           pink: '#ff3366',
           cyan: '#00e5ff',
           lime: '#39ff14',
           orange: '#ff6b35',
           red: '#ff0033',
-          gray: '#e0e0e0',
-          darkgray: '#888888',
+          gray: 'var(--color-neo-gray, #e0e0e0)',
+          darkgray: 'var(--color-neo-darkgray, #888888)',
         }
       },
       fontFamily: {
@@ -31,10 +31,10 @@ export default {
         'brut-4xl': ['3.5rem', { lineHeight: '1', fontWeight: '700' }],
       },
       boxShadow: {
-        'brut': '6px 6px 0px #0a0a0a',
-        'brut-sm': '4px 4px 0px #0a0a0a',
-        'brut-lg': '8px 8px 0px #0a0a0a',
-        'brut-hover': '3px 3px 0px #0a0a0a',
+        'brut': '6px 6px 0px var(--color-neo-black, #0a0a0a)',
+        'brut-sm': '4px 4px 0px var(--color-neo-black, #0a0a0a)',
+        'brut-lg': '8px 8px 0px var(--color-neo-black, #0a0a0a)',
+        'brut-hover': '3px 3px 0px var(--color-neo-black, #0a0a0a)',
         'brut-colored': '6px 6px 0px #ffd700',
         'brut-pink': '6px 6px 0px #ff3366',
         'brut-cyan': '6px 6px 0px #00e5ff',

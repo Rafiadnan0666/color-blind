@@ -7,10 +7,12 @@
   import { sampleRegionColor, extractPalette, detectContour } from '$lib/detection/colorDetection';
   import { classifyScene, getSceneDescription } from '$lib/detection/sceneClassifier';
   import ModeSheet from '$lib/components/ModeSheet.svelte';
+  import TourGuide from '$lib/components/TourGuide.svelte';
   import { scanHistory, favorites, savedColors, savedObjects, objectAnalytics, userSettings } from '$lib/supabase/db';
   import { session, user } from '$lib/stores/auth';
   import { notifyScanComplete, notifyColorSaved, notifyFavoriteSaved } from '$lib/supabase/notifications';
-  import { speakColor, speakObject } from '$lib/utils/voice';
+  import { speakColor, speakObject, speakMeatResult, speakMushroomResult } from '$lib/utils/voice';
+  import { analyzeMeat, analyzeMushroom } from '$lib/detection/foodSafety';
   import { perfMode, objectDetectionEnabled, colorDetectionEnabled, realtimeDetection } from '$lib/stores/settings';
 
   let video = $state(null);
@@ -36,7 +38,7 @@
 
   let fusionRotationIndex = 0;
   const allModels = ['fusion', 'coco', 'ssdlens', 'drug', 'currency', 'accessibility', 'traffic_light'];
-  const mobilenetModels = ['accessibility', 'currency', 'drug', 'traffic_light'];
+  const mobilenetModels = ['accessibility', 'currency', 'drug', 'traffic_light', 'meat', 'mushroom'];
   const tfModels = ['coco', 'ssdlens'];
   const fusionModels = ['coco', ...mobilenetModels];
   let cachedFrameCanvas = null;
@@ -70,7 +72,11 @@
   let batchFileName = $state('');
   let batchCancelled = false;
   let loadStage = $state('');
+  let showTour = $state(false);
   let wasDetecting = $state(false);
+  let regionSel = $state(null);
+  let regionDrag = $state(null);
+  let _bufCanvas = null;
   let skipFrameCounter = 0;
   let tabHidden = false;
 
@@ -99,15 +105,15 @@
   });
 
   function getEngineLabel(mode) {
-    const labels = { fusion: 'Fusion', coco: 'COCO', ssdlens: 'Objects', drug: 'Drug', currency: 'Currency', accessibility: 'Access', traffic_light: 'Traffic' };
+    const labels = { fusion: 'Fusion', coco: 'COCO', ssdlens: 'Objects', drug: 'Drug', currency: 'Currency', accessibility: 'Access', traffic_light: 'Traffic', meat: 'Meat', mushroom: 'Mushroom' };
     return labels[mode] || mode;
   }
   function getEngineIcon(mode) {
-    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', ssdlens: 'fa-apple-alt', drug: 'fa-pills', currency: 'fa-money-bill-wave', accessibility: 'fa-universal-access', traffic_light: 'fa-traffic-light' };
+    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', ssdlens: 'fa-apple-alt', drug: 'fa-pills', currency: 'fa-money-bill-wave', accessibility: 'fa-universal-access', traffic_light: 'fa-traffic-light', meat: 'fa-drumstick-bite', mushroom: 'fa-seedling' };
     return icons[mode] || 'fa-cube';
   }
   function getEngineColor(mode) {
-    const colors = { fusion: '#ff3366', coco: '#00e5ff', ssdlens: '#39ff14', drug: '#ff6b35', currency: '#ffd700', accessibility: '#00e5ff', traffic_light: '#ff0033' };
+    const colors = { fusion: '#ff3366', coco: '#00e5ff', ssdlens: '#39ff14', drug: '#ff6b35', currency: '#ffd700', accessibility: '#00e5ff', traffic_light: '#ff0033', meat: '#ff6b6b', mushroom: '#9b59b6' };
     return colors[mode] || '#ffd700';
   }
 
@@ -189,6 +195,9 @@
   onMount(() => {
     srcCanvas = document.createElement('canvas');
     if (useCamera) init();
+    if (typeof localStorage !== 'undefined' && !localStorage.getItem('clrblind_tour_completed')) {
+      setTimeout(() => { showTour = true; }, 1000);
+    }
     window.addEventListener('resize', positionOverlay);
     return () => {
       window.removeEventListener('resize', positionOverlay);
@@ -543,6 +552,8 @@
       const minScore = $perfMode === 'quality' ? 0.4 : $perfMode === 'performance' ? 0.2 : 0.3;
       results = results.filter(d => d.score >= minScore);
       results.sort((a, b) => b.score - a.score);
+      if (engineMode === 'meat') results = results.map(d => ({ ...d, analysis: analyzeMeat(d.label, d.score) }));
+      else if (engineMode === 'mushroom') results = results.map(d => ({ ...d, analysis: analyzeMushroom(d.label, d.score) }));
       const raw = results.slice(0, 15);
       const cw = overlay.width, ch = overlay.height;
       if (!prevDets.length) prevDets = raw;
@@ -563,7 +574,11 @@
       if (best) {
         const fc = sampleRegionColor(video, best.x1, best.y1, best.width, best.height);
         if (swId !== modeSwitchId) { detecting = false; return; }
-        if (focusObj !== best.label) speakObject(best.label, best.score);
+        if (focusObj !== best.label) {
+          if (engineMode === 'meat') speakMeatResult(best.label, best.score);
+          else if (engineMode === 'mushroom') speakMushroomResult(best.label, best.score);
+          else speakObject(best.label, best.score);
+        }
         focusObj = best.label;
         focusColor = fc;
       } else {
@@ -968,6 +983,8 @@
         if (myId !== undefined && myId !== detectId) return;
         let results = allResults.filter(d => d.score >= ($perfMode === 'quality' ? 0.4 : $perfMode === 'performance' ? 0.2 : 0.3));
         results.sort((a, b) => b.score - a.score);
+        if (engineMode === 'meat') results = results.map(d => ({ ...d, analysis: analyzeMeat(d.label, d.score) }));
+        else if (engineMode === 'mushroom') results = results.map(d => ({ ...d, analysis: analyzeMushroom(d.label, d.score) }));
         detections = results;
 
         const colored = await sampleObjColors(img, results);
@@ -981,7 +998,11 @@
           if (best) {
             const col = colored.find(c => c.label === best.label)?.color || null;
             if (myId !== undefined && myId !== detectId) return;
-            if (focusObj !== best.label) speakObject(best.label, best.score);
+        if (focusObj !== best.label) {
+          if (engineMode === 'meat') speakMeatResult(best.label, best.score);
+          else if (engineMode === 'mushroom') speakMushroomResult(best.label, best.score);
+          else speakObject(best.label, best.score);
+        }
             focusObj = best.label;
             focusColor = col;
           }
@@ -1171,6 +1192,9 @@
               drawMagnifier(ctx, focusColor.samplePos);
             }
           } catch (e) { console.error('upload draw error:', e); }
+          if (!_bufCanvas) _bufCanvas = document.createElement('canvas');
+          _bufCanvas.width = overlay.width; _bufCanvas.height = overlay.height;
+          _bufCanvas.getContext('2d').drawImage(overlay, 0, 0);
         }
         status = '';
         if (imageIdx !== undefined && imageIdx >= 0 && imageIdx < uploadedImages.length) {
@@ -1264,6 +1288,31 @@
     const source = useCamera ? video : srcCanvas;
     if (selectedObj && source) analyzeObjPalette(source, selectedObj);
     else { showObjPalette = false; objPalette = []; }
+  }
+
+  function redrawOverlay() {
+    if (!overlay || !imageSrc) return;
+    const ctx = overlay.getContext('2d');
+    if (!ctx) return;
+    if (_bufCanvas) {
+      ctx.clearRect(0, 0, overlay.width, overlay.height);
+      ctx.drawImage(_bufCanvas, 0, 0);
+    }
+    if (regionSel) {
+      ctx.save();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(regionSel.x1, regionSel.y1, regionSel.x2 - regionSel.x1, regionSel.y2 - regionSel.y1);
+      ctx.fillStyle = 'rgba(255,255,255,0.08)';
+      ctx.fillRect(regionSel.x1, regionSel.y1, regionSel.x2 - regionSel.x1, regionSel.y2 - regionSel.y1);
+      ctx.setLineDash([]);
+      const cx = (regionSel.x1 + regionSel.x2) / 2, cy = (regionSel.y1 + regionSel.y2) / 2;
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx - 8, cy); ctx.lineTo(cx + 8, cy); ctx.moveTo(cx, cy - 8); ctx.lineTo(cx, cy + 8); ctx.stroke();
+      ctx.restore();
+    }
   }
 
   async function toggleCam() {
@@ -1361,6 +1410,9 @@
           </button>
           <button class="tool-btn" onclick={() => showModeSheet = true} aria-label="More modes">
             <i class="fas fa-grid-2"></i>
+          </button>
+          <button class="tool-btn" onclick={() => showTour = true} aria-label="Help" title="Tour">
+            <i class="fas fa-circle-question"></i>
           </button>
         </div>
       </div>
@@ -1467,6 +1519,12 @@
                         <span class="font-brut text-brut-xs truncate capitalize">{d.label}</span>
                         <span class="model-pill">{d.model === 'coco-ssd' ? 'AI' : 'MNet'}</span>
                       </div>
+                      {#if d.analysis}
+                        <div class="flex items-center gap-1.5 mt-0.5">
+                          <i class="fas {d.analysis.icon}" style="color:{d.analysis.color};font-size:0.65rem"></i>
+                          <span class="text-brut-xs" style="color:{d.analysis.color}">{d.analysis.safety || d.analysis.toxicity}</span>
+                        </div>
+                      {/if}
                       <div class="flex items-center gap-1.5 mt-0.5">
                         <span class="conf-dot" style="width:{(d.score*100).toFixed(0)}%;background:{getColorFor(d)}"></span>
                         <span class="text-brut-xs text-neo-darkgray">{(d.score*100).toFixed(0)}%</span>
@@ -1534,7 +1592,12 @@
         {#if imageSrc}
           <div class="viewfinder">
             <img src={imageSrc} alt="" class="img">
-            <canvas bind:this={overlay}></canvas>
+            <canvas bind:this={overlay}
+              onmousedown={(e) => { if (!imageSrc) return; const r = overlay.getBoundingClientRect(); const x = (e.clientX - r.left) * (overlay.width / r.width); const y = (e.clientY - r.top) * (overlay.height / r.height); regionSel = null; regionDrag = { x, y }; }}
+              onmousemove={(e) => { if (!regionDrag) return; const r = overlay.getBoundingClientRect(); const x = (e.clientX - r.left) * (overlay.width / r.width); const y = (e.clientY - r.top) * (overlay.height / r.height); regionSel = { x1: Math.min(regionDrag.x, x), y1: Math.min(regionDrag.y, y), x2: Math.max(regionDrag.x, x), y2: Math.max(regionDrag.y, y) }; redrawOverlay(); }}
+              onmouseup={(e) => { if (!regionDrag) return; const r = overlay.getBoundingClientRect(); const x = (e.clientX - r.left) * (overlay.width / r.width); const y = (e.clientY - r.top) * (overlay.height / r.height); const sx1 = Math.min(regionDrag.x, x), sy1 = Math.min(regionDrag.y, y), sx2 = Math.max(regionDrag.x, x), sy2 = Math.max(regionDrag.y, y); regionDrag = null; const src = srcCanvas || document.querySelector('.viewfinder img'); if (sx2 - sx1 < 5 && sy2 - sy1 < 5) { regionSel = null; if (src) { const fc = sampleRegionColor(src, sx1 - 30, sy1 - 30, 60, 60); if (fc) { focusColor = fc; if (fc.samplePos) { fc.samplePos.x = sx1; fc.samplePos.y = sy1; } } } redrawOverlay(); return; } regionSel = { x1: sx1, y1: sy1, x2: sx2, y2: sy2 }; if (src) { const fc = sampleRegionColor(src, sx1, sy1, sx2 - sx1, sy2 - sy1); if (fc) { focusColor = fc; if (fc.samplePos) { fc.samplePos.x = (sx1 + sx2) / 2; fc.samplePos.y = (sy1 + sy2) / 2; } } } redrawOverlay(); }}
+              onmouseleave={() => { regionDrag = null; }}
+            ></canvas>
           </div>
           {#each modelLoadErrors as err}
             <div class="model-err-banner">{err}</div>
@@ -1569,7 +1632,7 @@
                   <i class="fas fa-plus mr-2"></i> Add More
                 </button>
               {:else}
-                <button class="brut-btn-primary mt-4 inline-block cursor-pointer">
+                <button class="brut-btn mt-4 inline-block cursor-pointer">
                   <i class="fas fa-folder-open mr-2"></i> Select Images
                 </button>
               {/if}
@@ -1593,7 +1656,15 @@
                 {#if focusColor.r !== undefined}
                   <div class="text-brut-2xs text-neo-darkgray font-mono">RGB({focusColor.r},{focusColor.g},{focusColor.b})</div>
                 {/if}
-                {#if focusObj}<div class="text-brut-xs text-neo-darkgray capitalize mt-0.5">{focusObj}</div>{/if}
+                {#if focusObj}
+                  <div class="text-brut-xs text-neo-darkgray capitalize mt-0.5">{focusObj}</div>
+                  {#if objColors[0]?.analysis}
+                    <div class="flex items-center gap-1 mt-0.5">
+                      <i class="fas {objColors[0].analysis.icon}" style="color:{objColors[0].analysis.color};font-size:0.65rem"></i>
+                      <span class="text-brut-xs" style="color:{objColors[0].analysis.color}">{objColors[0].analysis.advice}</span>
+                    </div>
+                  {/if}
+                {/if}
               </div>
               <div class="flex items-center gap-1.5">
                 {#if focusColor.confusion?.length}
@@ -1645,6 +1716,12 @@
                     <span class="font-brut text-brut-sm truncate capitalize">{d.label}</span>
                     <span class="model-badge">{d.model === 'coco-ssd' ? 'AI' : 'MNet'}</span>
                   </div>
+                  {#if d.analysis}
+                    <div class="flex items-center gap-1.5 mt-0.5">
+                      <i class="fas {d.analysis.icon}" style="color:{d.analysis.color};font-size:0.7rem"></i>
+                      <span class="font-brut text-brut-xs" style="color:{d.analysis.color}">{d.analysis.safety || d.analysis.toxicity}</span>
+                    </div>
+                  {/if}
                   <div class="flex items-center gap-2 mt-0.5">
                     <span class="font-brut text-brut-xs capitalize">{d.color.name}</span>
                     <span class="text-brut-xs font-mono">{d.color.hex}</span>
@@ -1728,7 +1805,7 @@
           </div>
           <div class="flex flex-wrap gap-1.5">
             {#each objColors as d}
-              <span class="tag" style="--c:{getColorFor(d)}">{d.label} <span class="opacity-60 ml-1">{(d.score*100).toFixed(0)}</span></span>
+              <span class="tag" style="--c:{getColorFor(d)}">{d.label} <span class="opacity-60 ml-1">{(d.score*100).toFixed(0)}</span>{#if d.analysis}<span class="ml-1 text-brut-2xs" style="color:{d.analysis.color}">· {d.analysis.safety || d.analysis.toxicity}</span>{/if}</span>
             {/each}
           </div>
         </div>
@@ -1755,7 +1832,15 @@
                 <div class="flex-1 min-w-0">
                   <div class="font-brut text-brut-sm capitalize">{focusColor.name}</div>
                   <div class="text-brut-xs text-neo-darkgray">{focusColor.hex} {#if focusColor.r !== undefined}({focusColor.r},{focusColor.g},{focusColor.b}){/if}</div>
-                  {#if focusObj}<div class="text-brut-xs text-neo-darkgray capitalize">{focusObj}</div>{/if}
+                  {#if focusObj}
+                    <div class="text-brut-xs text-neo-darkgray capitalize">{focusObj}</div>
+                    {#if objColors[0]?.analysis}
+                      <div class="flex items-center gap-1 mt-0.5">
+                        <i class="fas {objColors[0].analysis.icon}" style="color:{objColors[0].analysis.color};font-size:0.6rem"></i>
+                        <span class="text-brut-xs" style="color:{objColors[0].analysis.color}">{objColors[0].analysis.advice}</span>
+                      </div>
+                    {/if}
+                  {/if}
                 </div>
                 <div class="flex items-center gap-1">
                   {#if focusColor.confusion?.length}
@@ -1805,6 +1890,12 @@
                       <span class="font-brut text-brut-xs truncate capitalize">{d.label}</span>
                       <span class="model-pill">{d.model === 'coco-ssd' ? 'AI' : 'MNet'}</span>
                     </div>
+                    {#if d.analysis}
+                      <div class="flex items-center gap-1 mt-0.5">
+                        <i class="fas {d.analysis.icon}" style="color:{d.analysis.color};font-size:0.6rem"></i>
+                        <span class="text-brut-xs" style="color:{d.analysis.color}">{d.analysis.safety || d.analysis.toxicity}</span>
+                      </div>
+                    {/if}
                     <div class="flex items-center gap-1.5 mt-0.5">
                       <span class="conf-dot" style="width:{(d.score*100).toFixed(0)}%;background:{getColorFor(d)}"></span>
                       <span class="text-brut-xs text-neo-darkgray">{(d.score*100).toFixed(0)}%</span>
@@ -1850,6 +1941,8 @@
     {statusToastMsg}
   </div>
 {/if}
+
+<TourGuide show={showTour} onClose={() => showTour = false} />
 
 <style>
   .detect-page { margin: 0 auto; }

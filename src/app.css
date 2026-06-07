@@ -2,6 +2,430 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-neo-black: #0a0a0a;
+  --color-neo-white: #fefefe;
+  --color-neo-gray: #e0e0e0;
+  --color-neo-darkgray: #888888;
+}
+
+html.theme-dark {
+  --color-neo-black: #e0e0e0;
+  --color-neo-white: #1a1a1a;
+  --color-neo-gray: #2a2a2a;
+  --color-neo-darkgray: #999;
+  --color-neo-darkgray: #888;
+}
+
+html.theme-dark body {
+  background-color: #1a1a1a !important;
+  color: #e0e0e0 !important;
+}
+
+html.theme-dark .brut-card,
+html.theme-dark .brut-input,
+html.theme-dark .viewfinder,
+html.theme-dark .loading-card,
+html.theme-dark .result-box,
+html.theme-dark .toolbar,
+html.theme-dark .upload-thumbnails,
+html.theme-dark .desk-detections,
+html.theme-dark .cam-detections,
+html.theme-dark .cam-palette,
+html.theme-dark .profile-header,
+html.theme-dark .tabs-row,
+html.theme-dark .tab-btn,
+html.theme-dark .cvd-option,
+html.theme-dark .perf-option,
+html.theme-dark .model-err-banner,
+html.theme-dark .model-pill,
+html.theme-dark .model-badge,
+html.theme-dark .link-item,
+html.theme-dark .tag,
+html.theme-dark .cvd-chip,
+html.theme-dark .brut-btn:not(.brut-btn-danger):not(.brut-btn-primary):not(.brut-btn-google),
+html.theme-dark .upload-icon-btn,
+html.theme-dark .cam-fav-btn,
+html.theme-dark .desk-color-card,
+html.theme-dark .tool-btn,
+html.theme-dark .mode-selector,
+html.theme-dark .desk-scene-badge,
+html.theme-dark .cam-color-card,
+html.theme-dark .upload-color-card,
+html.theme-dark .summary-bar,
+html.theme-dark .thumb-scroll,
+html.theme-dark .save-btn,
+html.theme-dark .scene-chip {
+  background-color: #2a2a2a !important;
+  border-color: #555 !important;
+  color: #e0e0e0 !important;
+  box-shadow: 4px 4px 0 #444 !important;
+}
+
+html.theme-dark .loading-overlay {
+  background: rgba(20,20,20,0.95) !important;
+}
+
+html.theme-dark .cam-det-color,
+html.theme-dark .det-color-box,
+html.theme-dark .brut-avatar {
+  border-color: #555 !important;
+}
+
+html.theme-dark .cam-det-item,
+html.theme-dark .detection-item {
+  border-left-color: inherit;
+}
+
+html.theme-dark .conf-dot {
+  background: #444 !important;
+  border-color: #555 !important;
+}
+
+html.theme-dark .cam-dets-header,
+html.theme-dark .desk-dets-header,
+html.theme-dark .cam-dets-save,
+html.theme-dark .progress-track,
+html.theme-dark .stat-item,
+html.theme-dark .color-chip,
+html.theme-dark .scene-chip,
+html.theme-dark .swatch-xl,
+html.theme-dark .swatch-lg,
+html.theme-dark .pal-mini-upload,
+html.theme-dark .color-swatch-mini,
+html.theme-dark .det-color-hex {
+  border-color: #555 !important;
+}
+
+html.theme-dark .toast,
+html.theme-dark .brut-alert-success {
+  color: #1a1a1a !important;
+}
+
+html.theme-dark .scene-palette-grid,
+html.theme-dark .desk-palette-bar,
+html.theme-dark .palette-panel {
+  background: #2a2a2a !important;
+  border-color: #555 !important;
+}
+
+html.theme-dark .brut-btn-primary {
+  box-shadow: 4px 4px 0 #444 !important;
+}
+
+html.theme-dark .upload-zone {
+  border-color: #555 !important;
+  background: #2a2a2a !important;
+}
+
+html.theme-dark .cam-det-hex,
+html.theme-dark .color-swatch-detail {
+  background: rgba(0,0,0,0.6) !important;
+  border-color: #555 !important;
+}
+
+html.theme-dark .history-item,
+html.theme-dark .edit-input,
+html.theme-dark .edit-textarea,
+html.theme-dark .modal-card,
+html.theme-dark .modal-notes {
+  background: #2a2a2a !important;
+  border-color: #555 !important;
+  color: #e0e0e0 !important;
+}
+
+html.theme-dark .shadow-brut,
+html.theme-dark [class*="shadow-brut"] {
+  box-shadow: 4px 4px 0 #444 !important;
+}
+
+html.theme-dark .cvd-option.active,
+html.theme-dark .tab-btn.active {
+  background: #ffd700 !important;
+  color: #0a0a0a !important;
+  border-color: #555 !important;
+}
+
+html.theme-dark .chat-card {
+  background: #2a2a2a !important;
+  border-color: #555 !important;
+  box-shadow: 6px 6px 0 #444 !important;
+}
+
+html.theme-dark .chat-header {
+  border-bottom-color: #555 !important;
+}
+
+html.theme-dark .avatar,
+html.theme-dark .msg-avatar {
+  background: #444 !important;
+  border-color: #555 !important;
+  color: #e0e0e0 !important;
+}
+
+html.theme-dark .clear-btn {
+  background: #2a2a2a !important;
+  border-color: #555 !important;
+}
+
+html.theme-dark .msg.user .msg-bubble {
+  background: #3a3a3a !important;
+  border-color: #666 !important;
+  color: #e0e0e0 !important;
+}
+
+html.theme-dark .msg.assistant .msg-bubble {
+  background: #3a3a3a !important;
+  border-color: #666 !important;
+  color: #e0e0e0 !important;
+}
+
+html.theme-dark .input-field {
+  background: #2a2a2a !important;
+  border-color: #555 !important;
+  color: #e0e0e0 !important;
+}
+
+html.theme-dark .input-field:focus {
+  background: #333 !important;
+}
+
+html.theme-dark .chat-input {
+  border-top-color: #555 !important;
+  background: #2a2a2a !important;
+}
+
+html.theme-dark .send-btn {
+  background: #444 !important;
+  color: #e0e0e0 !important;
+  border-color: #555 !important;
+}
+
+html.theme-dark .send-btn:hover {
+  background: #ffd700 !important;
+  color: #0a0a0a !important;
+}
+
+html.theme-dark header,
+html.theme-dark footer,
+html.theme-dark .bottom-nav,
+html.theme-dark [class*="border-brut"] {
+  border-color: #555 !important;
+}
+
+html.theme-dark header {
+  background-color: #222 !important;
+}
+
+html.theme-dark footer {
+  background-color: #222 !important;
+  color: #e0e0e0 !important;
+}
+
+html.theme-dark .brut-nav-link {
+  color: #e0e0e0 !important;
+}
+
+html.theme-dark .brut-nav-link-active {
+  background: #ffd700 !important;
+  color: #0a0a0a !important;
+  border-color: #555 !important;
+}
+
+html.theme-dark .link-item {
+  color: #e0e0e0 !important;
+}
+
+html.theme-dark .tour-card,
+html.theme-dark .sheet {
+  background: #2a2a2a !important;
+  border-color: #555 !important;
+  color: #e0e0e0 !important;
+}
+
+html.theme-dark .tour-desc {
+  color: #aaa !important;
+}
+
+html.theme-dark .tour-btn,
+html.theme-dark .mode-btn,
+html.theme-dark .close-btn {
+  background: #2a2a2a !important;
+  border-color: #555 !important;
+  color: #e0e0e0 !important;
+}
+
+html.theme-dark .tour-next {
+  background: #ffd700 !important;
+  color: #0a0a0a !important;
+}
+
+html.theme-dark .tour-skip {
+  color: #999 !important;
+}
+
+html.theme-dark .mode-btn.active {
+  box-shadow: 4px 4px 0 var(--mode-color) !important;
+}
+
+html.theme-dark .tour-dot {
+  background: #444 !important;
+  border-color: #555 !important;
+}
+
+html.theme-dark .dash-card,
+html.theme-dark [class*="bg-gradient"] {
+  background: #2a2a2a !important;
+  border-color: #555 !important;
+}
+
+html.theme-dark [class*="bg-white"] {
+  background: #333 !important;
+  border-color: #555 !important;
+}
+
+html.theme-dark .dash-avatar {
+  border-color: #555 !important;
+}
+
+html.theme-dark [class*="text-green-600"],
+html.theme-dark [class*="text-blue-600"],
+html.theme-dark [class*="text-purple-600"],
+html.theme-dark [class*="text-teal-600"],
+html.theme-dark [class*="text-pink-600"],
+html.theme-dark [class*="text-orange-600"],
+html.theme-dark [class*="text-yellow-600"] {
+  color: #80d4ff !important;
+}
+
+html.theme-dark [class*="from-"],
+html.theme-dark [class*="to-"],
+html.theme-dark [class*="bg-cyan-100"],
+html.theme-dark [class*="bg-purple-100"],
+html.theme-dark [class*="bg-teal-100"],
+html.theme-dark [class*="bg-pink-100"],
+html.theme-dark [class*="bg-green-100"],
+html.theme-dark [class*="bg-orange-100"],
+html.theme-dark [class*="bg-yellow-100"],
+html.theme-dark [class*="bg-blue-50"],
+html.theme-dark [class*="bg-blue-200"] {
+  background: #2a2a2a !important;
+}
+
+html.theme-dark .text-green-600,
+html.theme-dark .text-blue-600,
+html.theme-dark .text-purple-600,
+html.theme-dark .text-teal-600,
+html.theme-dark .text-pink-600,
+html.theme-dark .text-orange-600,
+html.theme-dark .text-yellow-600,
+html.theme-dark .text-blue-900 {
+  color: #80d4ff !important;
+}
+
+html.theme-dark .brut-heading {
+  color: #e0e0e0 !important;
+}
+
+html.theme-light {
+  --color-neo-black: #0a0a0a;
+  --color-neo-white: #fefefe;
+  --color-neo-gray: #e0e0e0;
+  --color-neo-darkgray: #888888;
+}
+
+html.theme-grey {
+  --color-neo-black: #2a2a2a;
+  --color-neo-white: #c8c8c8;
+  --color-neo-gray: #b0b0b0;
+  --color-neo-darkgray: #666;
+}
+
+html.theme-grey body {
+  background-color: #c8c8c8 !important;
+  color: #2a2a2a !important;
+}
+
+html.theme-grey .brut-card,
+html.theme-grey .brut-input,
+html.theme-grey .viewfinder,
+html.theme-grey .loading-card,
+html.theme-grey .result-box,
+html.theme-grey .toolbar,
+html.theme-grey .upload-thumbnails,
+html.theme-grey .desk-detections,
+html.theme-grey .cam-detections,
+html.theme-grey .cam-palette,
+html.theme-grey .profile-header,
+html.theme-grey .cvd-option,
+html.theme-grey .tab-btn,
+html.theme-grey .tabs-row,
+html.theme-grey .model-pill,
+html.theme-grey .model-badge,
+html.theme-grey .link-item,
+html.theme-grey .brut-btn:not(.brut-btn-danger):not(.brut-btn-primary):not(.brut-btn-google),
+html.theme-grey .upload-icon-btn,
+html.theme-grey .cam-fav-btn,
+html.theme-grey .desk-color-card,
+html.theme-grey .tour-card,
+html.theme-grey .sheet,
+html.theme-grey .mode-btn,
+html.theme-grey .close-btn,
+html.theme-grey .history-item,
+html.theme-grey .edit-input,
+html.theme-grey .edit-textarea,
+html.theme-grey .modal-card,
+html.theme-grey .modal-notes {
+  background: #b8b8b8 !important;
+  border-color: #666 !important;
+  color: #2a2a2a !important;
+  box-shadow: 4px 4px 0 #888 !important;
+}
+
+html.theme-grey .brut-card {
+  background: #b8b8b8 !important;
+}
+
+html.theme-grey .tab-btn {
+  border-color: #666 !important;
+  border-right-color: #666 !important;
+  background: #b8b8b8 !important;
+  color: #2a2a2a !important;
+}
+
+html.theme-grey .tab-btn.active {
+  background: #ffd700 !important;
+  color: #0a0a0a !important;
+}
+
+html.theme-grey .cvd-option.active {
+  background: #ffd700 !important;
+  color: #0a0a0a !important;
+  box-shadow: 2px 2px 0 #666 !important;
+}
+
+html.theme-grey header {
+  background-color: #b0b0b0 !important;
+}
+
+html.theme-grey .brut-nav-link {
+  color: #2a2a2a !important;
+}
+
+html.theme-grey .tour-desc {
+  color: #555 !important;
+}
+
+html.theme-grey .tour-btn,
+html.theme-grey .tour-skip {
+  color: #2a2a2a !important;
+}
+
+html.theme-grey .tour-next {
+  background: #999 !important;
+  color: #fff !important;
+}
+
 @layer base {
   html {
     font-family: 'Space Grotesk', system-ui, sans-serif;

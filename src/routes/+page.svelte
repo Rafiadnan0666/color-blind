@@ -19,12 +19,12 @@
 
     
     {#if $session}
-      <a href="/dashboard" class="brut-btn-primary text-brut-lg px-8 py-4 inline-block">
+      <a href="/dashboard" class="brut-btn text-brut-lg px-8 py-4 inline-block">
         Go to Dashboard
       </a>
     {:else}
       <div class="flex gap-4 justify-center flex-wrap">
-        <a href="/auth/login" class="brut-btn-primary text-brut-lg px-8 py-4">
+        <a href="/auth/login" class="brut-btn text-brut-lg px-8 py-4">
           Sign In
         </a>
         <a href="/auth/register" class="brut-btn text-brut-lg px-8 py-4">
@@ -164,11 +164,11 @@
       Start detecting color blindness patterns and create truly accessible designs
     </p>
     {#if $session}
-      <a href="/dashboard" class="brut-btn-primary text-brut-lg px-8 py-4 inline-block">
+      <a href="/dashboard" class="brut-btn text-brut-lg px-8 py-4 inline-block">
         Go to Dashboard
       </a>
     {:else}
-      <a href="/auth/register" class="brut-btn-primary text-brut-lg px-8 py-4 inline-block">
+      <a href="/auth/register" class="brut-btn text-brut-lg px-8 py-4 inline-block">
         Get Started Free
       </a>
     {/if}
