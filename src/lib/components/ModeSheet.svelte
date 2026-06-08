@@ -1,32 +1,9 @@
 <script>
-  import { fly, scale } from 'svelte/transition';
-
-  let { show = false, current = 'fusion', onSelect, onClose } = $props();
+  let { show = false, current = 'coco', onSelect, onClose } = $props();
 
   const modes = [
-    { id: 'fusion', icon: 'fa-compress-alt', label: 'Fusion', desc: 'All engines combined' },
     { id: 'coco', icon: 'fa-globe', label: 'COCO', desc: '90-class general objects' },
-    { id: 'currency', icon: 'fa-money-bill-wave', label: 'Currency', desc: '7 rupiah notes' },
-    { id: 'drug', icon: 'fa-pills', label: 'Medicine', desc: 'Medicine detection (paracetamol, panadol, amoxicillin, vitamin C)' },
-    { id: 'traffic_light', icon: 'fa-traffic-light', label: 'Traffic', desc: 'Red, green, yellow' },
-    { id: 'accessibility', icon: 'fa-universal-access', label: 'Access', desc: 'Road signs' },
-    { id: 'meat', icon: 'fa-drumstick-bite', label: 'Meat', desc: 'Meat freshness' },
-    { id: 'mushroom', icon: 'fa-seedling', label: 'Mushroom', desc: 'Mushroom toxicity' },
   ];
-
-  function getEngineColor(modeId) {
-    const colors = {
-      fusion: '#ff3366',
-      coco: '#00e5ff',
-      currency: '#ffd700',
-      drug: '#ff6b35',
-      traffic_light: '#ff0033',
-      accessibility: '#00e5ff',
-      meat: '#ff6b6b',
-      mushroom: '#9b59b6',
-    };
-    return colors[modeId] || '#ffd700';
-  }
 </script>
 
 {#if show}
@@ -40,13 +17,12 @@
       class="sheet"
       role="dialog"
       tabindex="-1"
-      transition:fly={{ y: 300, duration: 250, easing: (t) => 1 - Math.pow(1 - t, 3) }}
       onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => { if (e.key === 'Escape') onClose(); }}
     >
       <div class="handle"></div>
       <div class="header">
-        <span class="font-brut text-brut-lg uppercase">Select Engine</span>
+        <span class="font-brut text-brut-lg uppercase">Detection Engine</span>
         <button class="close-btn" onclick={onClose} aria-label="Close"><i class="fas fa-times"></i></button>
       </div>
       <div class="modes-grid">
@@ -54,16 +30,16 @@
           <button
             class="mode-btn"
             class:active={current === mode.id}
-            style="--mode-color: {getEngineColor(mode.id)}"
+            style="--mode-color: #00e5ff"
             onclick={() => { onSelect(mode.id); onClose(); }}
           >
-            <div class="mode-icon" style="background: {getEngineColor(mode.id)}22; border-color: {getEngineColor(mode.id)}">
-              <i class="fas {mode.icon}" style="color: {getEngineColor(mode.id)}"></i>
+            <div class="mode-icon" style="background: #00e5ff22; border-color: #00e5ff">
+              <i class="fas {mode.icon}" style="color: #00e5ff"></i>
             </div>
             <div class="mode-label">{mode.label}</div>
             <div class="mode-desc">{mode.desc}</div>
             {#if current === mode.id}
-              <div class="check" style="background: {getEngineColor(mode.id)}">
+              <div class="check" style="background: #00e5ff">
                 <i class="fas fa-check"></i>
               </div>
             {/if}
@@ -136,7 +112,7 @@
 
   .modes-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 0.5rem;
   }
 

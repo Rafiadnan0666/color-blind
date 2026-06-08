@@ -1,19 +1,17 @@
 <script>
   import { onMount, tick } from 'svelte';
   import { fly, scale } from 'svelte/transition';
-  import { loadModel, detectObjects, getColor } from '$lib/detection/objectDetection';
   import { loadTFModel, detectTF, getTFColor } from '$lib/detection/tfDetection';
-  import { loadMobileNetModel, loadAllMobileNetModels, detectMobileNet, getMobileNetColor, getMobileNetModelKeys } from '$lib/detection/mobilenetDetection';
   import { sampleRegionColor, extractPalette, detectContour } from '$lib/detection/colorDetection';
-  import { classifyScene, getSceneDescription } from '$lib/detection/sceneClassifier';
+  import { classifyScene } from '$lib/detection/sceneClassifier';
   import ModeSheet from '$lib/components/ModeSheet.svelte';
   import TourGuide from '$lib/components/TourGuide.svelte';
   import { scanHistory, favorites, savedColors, savedObjects, objectAnalytics, userSettings } from '$lib/supabase/db';
   import { session, user } from '$lib/stores/auth';
   import { notifyScanComplete, notifyColorSaved, notifyFavoriteSaved } from '$lib/supabase/notifications';
-  import { speakColor, speakObject, speakMeatResult, speakMushroomResult } from '$lib/utils/voice';
+  import { speakColor, speakObject } from '$lib/utils/voice';
   import { analyzeDetection } from '$lib/detection/analysis';
-  import { perfMode, objectDetectionEnabled, colorDetectionEnabled, realtimeDetection } from '$lib/stores/settings';
+  import { perfMode, objectDetectionEnabled, colorDetectionEnabled } from '$lib/stores/settings';
 
   let video = $state(null);
   let overlay = $state(null);
@@ -36,12 +34,8 @@
   let detecting = false;
   let modeSwitchId = 0;
 
-  let fusionRotationIndex = 0;
-  let allFusionResults = [];
-  const allModels = ['fusion', 'coco', 'drug', 'currency', 'accessibility', 'traffic_light'];
-  const mobilenetModels = ['accessibility', 'currency', 'drug', 'traffic_light', 'meat', 'mushroom'];
+  const allModels = ['coco'];
   const tfModels = ['coco'];
-  const fusionModels = ['coco', ...mobilenetModels];
   let cachedFrameCanvas = null;
   let scenePalette = $state([]);
 
@@ -102,7 +96,15 @@
   }
 
   $effect(() => {
-    if (status === 'Start') { loadProgress = 15; loadStage = LOAD_STAGES[0]; clearLoadTimeout(); }
+    if (status === 'Start') {
+      loadProgress = 15; loadStage = LOAD_STAGES[0]; clearLoadTimeout();
+      loadForceReadyId = setTimeout(() => {
+        if (status === 'Start') {
+          loadProgress = 40; loadStage = LOAD_STAGES[1];
+          status = 'Load';
+        }
+      }, 8000);
+    }
     else if (status === 'Load') {
       loadProgress = 40; loadStage = LOAD_STAGES[1]; clearLoadTimeout();
       loadTimeoutId = setTimeout(() => {
@@ -124,27 +126,20 @@
       loadProgress = 100; loadStage = LOAD_STAGES[4]; clearLoadTimeout();
       setTimeout(() => { loadProgress = 0; loadStage = ''; }, 600);
     }
-    else if (status && status.includes('Error') || status?.includes('denied') || status?.includes('fail')) {
+    else if (status && (status.includes('Error') || status?.includes('denied') || status?.includes('fail'))) {
       clearLoadTimeout();
       loadProgress = 0; loadStage = '';
     }
   });
 
   function getEngineLabel(mode) {
-    const labels = { fusion: 'Fusion', coco: 'COCO', drug: 'Medicine', currency: 'Currency', accessibility: 'Access', traffic_light: 'Traffic', meat: 'Meat', mushroom: 'Mushroom' };
-    return labels[mode] || mode;
+    return mode === 'coco' ? 'COCO' : mode;
   }
   function getEngineIcon(mode) {
-    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', drug: 'fa-tablets', currency: 'fa-money-bill-wave', accessibility: 'fa-universal-access', traffic_light: 'fa-traffic-light', meat: 'fa-drumstick-bite', mushroom: 'fa-seedling' };
-    return icons[mode] || 'fa-cube';
+    return mode === 'coco' ? 'fa-globe' : 'fa-cube';
   }
   function getEngineColor(mode) {
-    const colors = { fusion: '#ff3366', coco: '#00e5ff', drug: '#ff6b35', currency: '#ffd700', accessibility: '#00e5ff', traffic_light: '#ff0033', meat: '#ff6b6b', mushroom: '#9b59b6' };
-    return colors[mode] || '#ffd700';
-  }
-
-  function getMobileNetModelKey(mode) {
-    return mobilenetModels.includes(mode) ? mode : null;
+    return mode === 'coco' ? '#00e5ff' : '#ffd700';
   }
 
   async function switchMode(m) {
@@ -164,8 +159,6 @@
     focusColor = null;
     focusObj = null;
     prevDets = [];
-    allFusionResults = [];
-    fusionRotationIndex = 0;
     scenePalette = [];
     colorPickerPos = null;
     stopLoop();
@@ -194,30 +187,10 @@
 
   async function reloadModels() {
     status = 'Load';
-    const modelsToLoad = [];
-    if (engineMode === 'fusion') {
-      modelsToLoad.push(loadTFModel().catch(e => {
+    await loadTFModel().catch(e => {
       console.warn('[INIT] TF model failed, continuing without it:', e?.message);
       return null;
-    }));
-     modelsToLoad.push(loadAllMobileNetModels().catch(e => {
-      console.warn('[INIT] MobileNet models failed:', e?.message);
-      return null;
-    }));
-    } else if (tfModels.includes(engineMode)) {
-      modelsToLoad.push(loadTFModel().catch(e => {
-      console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-      return null;
-    }));
-    } else if (mobilenetModels.includes(engineMode)) {
-      modelsToLoad.push(loadMobileNetModel(engineMode));
-    } else {
-      modelsToLoad.push(loadTFModel().catch(e => {
-      console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-      return null;
-    }));
-    }
-    await Promise.allSettled(modelsToLoad);
+    });
   }
   let showObjPalette = $state(false);
   let objPalette = $state([]);
@@ -278,7 +251,6 @@
     if (detectTimer) { clearInterval(detectTimer); detectTimer = null; }
     detecting = false;
     if (detectTimeoutId) { clearTimeout(detectTimeoutId); detectTimeoutId = null; }
-    allFusionResults = [];
   }
 
   function toast(msg, type = 'success') {
@@ -399,45 +371,13 @@
       }
       status = 'Load';
       modelLoadErrors = [];
-      const modelsToLoad = [];
-      const modelNames = [];
-      const mk = getMobileNetModelKey(engineMode);
-      if (engineMode === 'fusion') {
-        modelsToLoad.push(loadTFModel().catch(e => {
-          console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-          return null;
-        }));
-        modelNames.push('COCO-SSD');
-       modelsToLoad.push(loadAllMobileNetModels().catch(e => {
-        console.warn('[INIT] MobileNet models failed:', e?.message);
-        return null;
-      }));
-        modelNames.push('MobileNetV2 All');
-      } else if (tfModels.includes(engineMode)) {
-        modelsToLoad.push(loadTFModel().catch(e => {
-          console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-          return null;
-        }));
-        modelNames.push('COCO-SSD');
-      } else if (mk) {
-        modelsToLoad.push(loadMobileNetModel(mk));
-        modelNames.push(`MobileNetV2 ${getEngineLabel(engineMode)}`);
-      } else {
-        modelsToLoad.push(loadTFModel().catch(e => {
+      const loadResult = await loadTFModel().catch(e => {
         console.warn('[INIT] TF model failed, continuing without it:', e?.message);
         return null;
-      }));
-        modelNames.push('COCO-SSD');
-      }
-      const loadResults = await Promise.allSettled(modelsToLoad);
-      for (let i = 0; i < loadResults.length; i++) {
-        if (loadResults[i].status === 'rejected') {
-          const err = `⚠ ${modelNames[i]} failed to load`;
-          modelLoadErrors.push(err);
-          toast(err, 'error');
-        } else {
-          console.log('✓ ' + modelNames[i] + ' loaded successfully');
-        }
+      });
+      if (!loadResult) {
+        modelLoadErrors.push('COCO-SSD failed to load');
+        toast('COCO-SSD failed to load', 'error');
       }
       classifyScene(video).then(s => { sceneInfo = s; }).catch(() => {});
       status = '';
@@ -510,8 +450,17 @@
 
   function getColorFor(d) {
     if (d.model === 'coco-ssd') return getTFColor(d.label);
-    if (d.model === 'mobilenet') return getMobileNetColor(d.label);
-    return getColor(d.label);
+    return getTFColor(d.label);
+  }
+
+  function contrastText(hex) {
+    const c = hex.replace('#','');
+    const r = parseInt(c.substring(0,2),16), g = parseInt(c.substring(2,4),16), b = parseInt(c.substring(4,6),16);
+    return (r*299 + g*587 + b*114) / 1000 > 128 ? '#0a0a0a' : '#fefefe';
+  }
+
+  function shortHex(h) {
+    return h && h.length >= 7 ? h.slice(0,5) : h || '';
   }
 
   async function sampleObjColors(source, dets) {
@@ -618,40 +567,15 @@
     try {
       const frame = captureFrame(video);
       let results = [];
-      const mk = getMobileNetModelKey(engineMode);
 
-      if (engineMode === 'fusion') {
-        allFusionResults = [];
-        const batchSize = $perfMode === 'performance' ? 2 : $perfMode === 'quality' ? 5 : 3;
-        for (let b = 0; b < batchSize; b++) {
-          const modelId = fusionModels[fusionRotationIndex % fusionModels.length];
-          fusionRotationIndex++;
-          let batchResults;
-          if (modelId === 'coco') batchResults = await detectTF(frame).catch(() => []);
-          else batchResults = await detectMobileNet(frame, modelId).catch(() => []);
-          allFusionResults.push(...batchResults);
-        }
-        results = allFusionResults;
-      } else if (mk) {
-        results = await detectMobileNet(frame, mk).catch(() => []);
-      } else {
-        results = await detectTF(frame).catch(() => []);
-      }
+      results = await detectTF(frame).catch(() => []);
       if (swId !== modeSwitchId) { detecting = false; return; }
 
-      if (engineMode === 'meat' || engineMode === 'mushroom') {
-        results = results.filter(d => d.score >= 0.2);
-        results = results.map(d => ({
-          ...d,
-          analysis: analyzeDetection(d, frame, engineMode, overlay.width, overlay.height),
-        }));
-      } else {
-        results = filterDetections(results);
-        results = results.map(d => ({
-          ...d,
-          analysis: analyzeDetection(d, frame, engineMode, overlay.width, overlay.height),
-        }));
-      }
+      results = filterDetections(results);
+      results = results.map(d => ({
+        ...d,
+        analysis: analyzeDetection(d, frame, engineMode, overlay.width, overlay.height),
+      }));
       const cw = overlay.width, ch = overlay.height;
       if (!prevDets.length) prevDets = results;
       const sm = results.map((d, i) => {
@@ -672,9 +596,7 @@
         const fc = sampleRegionColor(video, best.x1, best.y1, best.width, best.height);
         if (swId !== modeSwitchId) { detecting = false; return; }
         if (focusObj !== best.label) {
-          if (engineMode === 'meat') speakMeatResult(best.label, best.score);
-          else if (engineMode === 'mushroom') speakMushroomResult(best.label, best.score);
-          else speakObject(best.label, best.score);
+          speakObject(best.label, best.score);
         }
         focusObj = best.label;
         focusColor = fc;
@@ -1130,62 +1052,21 @@
       if (myId !== undefined && myId !== detectId) return;
       try {
         status = 'Detect';
-        const modelsToLoad = [];
-        if (engineMode === 'fusion') {
-          modelsToLoad.push(loadTFModel().catch(e => {
+        await loadTFModel().catch(e => {
   console.warn('[INIT] TF model failed, continuing without it:', e?.message);
   return null;
-}));
-         modelsToLoad.push(loadAllMobileNetModels().catch(e => {
-  console.warn('[INIT] MobileNet models failed:', e?.message);
-  return null;
-}));
-        } else if (tfModels.includes(engineMode)) {
-          modelsToLoad.push(loadTFModel().catch(e => {
-  console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-  return null;
-}));
-        } else if (mobilenetModels.includes(engineMode)) {
-          modelsToLoad.push(loadMobileNetModel(engineMode));
-        } else {
-          modelsToLoad.push(loadTFModel().catch(e => {
-  console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-  return null;
-}));
-        }
-        await Promise.allSettled(modelsToLoad);
+});
         if (myId !== undefined && myId !== detectId) return;
         if (srcCanvas) { srcCanvas.width = img.naturalWidth; srcCanvas.height = img.naturalHeight; srcCanvas.getContext('2d').drawImage(img, 0, 0); }
         if (overlay) { overlay.width = img.naturalWidth; overlay.height = img.naturalHeight; }
         const frame = captureFrame(img);
-        const mk = getMobileNetModelKey(engineMode);
-        let allResults = [];
-        if (engineMode === 'fusion') {
-          const [tfR, ...mobileR] = await Promise.all([
-            detectTF(frame).catch(() => []),
-            ...mobilenetModels.map(mk2 => detectMobileNet(frame, mk2).catch(() => []))
-          ]);
-          allResults = [].concat(tfR, ...mobileR);
-        } else if (tfModels.includes(engineMode)) {
-          allResults = await detectTF(frame).catch(() => []);
-        } else if (mk) {
-          allResults = await detectMobileNet(frame, mk).catch(() => []);
-        }
+        let allResults = await detectTF(frame).catch(() => []);
         if (myId !== undefined && myId !== detectId) return;
-        let results;
-        if (engineMode === 'meat' || engineMode === 'mushroom') {
-          results = allResults.filter(d => d.score >= 0.2);
-          results = results.map(d => ({
-            ...d,
-            analysis: analyzeDetection(d, frame, engineMode, overlay?.width, overlay?.height),
-          }));
-        } else {
-          results = filterDetections(allResults);
-          results = results.map(d => ({
-            ...d,
-            analysis: analyzeDetection(d, frame, engineMode, overlay?.width, overlay?.height),
-          }));
-        }
+        let results = filterDetections(allResults);
+        results = results.map(d => ({
+          ...d,
+          analysis: analyzeDetection(d, frame, engineMode, overlay?.width, overlay?.height),
+        }));
         detections = results;
 
         const colored = await sampleObjColors(img, results);
@@ -1200,9 +1081,7 @@
             const col = colored.find(c => c.label === best.label)?.color || null;
             if (myId !== undefined && myId !== detectId) return;
         if (focusObj !== best.label) {
-          if (engineMode === 'meat') speakMeatResult(best.label, best.score);
-          else if (engineMode === 'mushroom') speakMushroomResult(best.label, best.score);
-          else speakObject(best.label, best.score);
+          speakObject(best.label, best.score);
         }
             focusObj = best.label;
             focusColor = col;
@@ -1539,18 +1418,7 @@
       if (uploadedImages.length > 0) {
         switchToImage(uploadedImages.length - 1);
       }
-      const toLoad = [];
-      if (engineMode === 'fusion') {
-        toLoad.push(loadTFModel());
-        toLoad.push(loadAllMobileNetModels());
-      } else if (tfModels.includes(engineMode)) {
-        toLoad.push(loadTFModel());
-      } else if (mobilenetModels.includes(engineMode)) {
-        toLoad.push(loadMobileNetModel(engineMode));
-      } else {
-        toLoad.push(loadTFModel());
-      }
-      await Promise.allSettled(toLoad);
+      await loadTFModel().catch(() => {});
     }
   }
 
@@ -1729,11 +1597,30 @@
               <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div class="cam-color-card" style="border-color: {focusColor.hex}" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}>
                 <div class="flex items-center gap-2 w-full">
-                  <div class="swatch-lg" style="background: {focusColor.hex}; box-shadow: 0 0 12px {focusColor.hex}66" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}></div>
+                  <div class="swatch-lg" style="background: {focusColor.hex}; box-shadow: 0 0 12px {focusColor.hex}66" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}>
+                    <span class="swatch-hex" style="color:{contrastText(focusColor.hex)}">{shortHex(focusColor.hex)}</span>
+                  </div>
                   <div class="flex-1 min-w-0">
                     <div class="font-brut text-brut-sm capitalize">{focusColor.name}</div>
-                    <div class="text-brut-xs text-neo-darkgray">{focusColor.hex} {#if focusColor.r !== undefined}({focusColor.r},{focusColor.g},{focusColor.b}){/if}</div>
-                    {#if focusObj}<div class="text-brut-xs text-neo-darkgray capitalize">{focusObj}</div>{/if}
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-brut-xs text-neo-darkgray font-mono">{focusColor.hex}</span>
+                      {#if focusColor.temperature}
+                        <span class="temp-chip" class:temp-warm={focusColor.temperature === 'warm'} class:temp-cool={focusColor.temperature === 'cool'} class:temp-neutral={focusColor.temperature === 'neutral' || focusColor.temperature === 'black' || focusColor.temperature === 'dark neutral'}>
+                          {focusColor.temperature === 'warm' ? 'Warm' : focusColor.temperature === 'cool' ? 'Cool' : 'Neutral'}
+                        </span>
+                      {/if}
+                    </div>
+                    {#if focusColor.r !== undefined}
+                      <div class="text-brut-2xs text-neo-darkgray font-mono">RGB({focusColor.r},{focusColor.g},{focusColor.b})</div>
+                    {/if}
+                    {#if focusColor.whiteContrast}
+                      <div class="flex items-center gap-1 mt-0.5">
+                        <span class="contrast-badge" class:aaa={focusColor.wcagWhite === 'AAA'} class:aa={focusColor.wcagWhite === 'AA'} class:fail={focusColor.wcagWhite === 'Fail'}>
+                          WCAG {focusColor.wcagWhite}
+                        </span>
+                      </div>
+                    {/if}
+                    {#if focusObj}<div class="text-brut-xs text-neo-darkgray capitalize mt-0.5">{focusObj}</div>{/if}
                   </div>
                   <div class="flex items-center gap-1">
                     {#if focusColor.confusion?.length}
@@ -1750,6 +1637,15 @@
                         <div class="sim-swatch" style="background: {sim.hex}"></div>
                         <span class="sim-label">{sim.label.slice(0,5)}</span>
                       </div>
+                    {/each}
+                  </div>
+                {/if}
+                {#if focusColor.harmonies?.length}
+                  <div class="harmony-row">
+                    {#each focusColor.harmonies as harm}
+                      {#each harm.colors as hc}
+                        <div class="harmony-dot" style="background:{hc.hex}" title="{harm.name}: {hc.hex}"></div>
+                      {/each}
                     {/each}
                   </div>
                 {/if}
@@ -1781,10 +1677,12 @@
                         <span class="font-brut text-brut-xs truncate capitalize">{d.label}</span>
                         <span class="model-pill">{d.model === 'coco-ssd' ? 'AI' : 'MNet'}</span>
                       </div>
-                      {#if d.analysis}
+                                            {#if d.analysis}
                         <div class="flex items-center gap-1.5 mt-0.5">
-                          <i class="fas {d.analysis.icon}" style="color:{d.analysis.color};font-size:0.65rem"></i>
-                          <span class="text-brut-xs" style="color:{d.analysis.color}">{d.analysis.safety || d.analysis.toxicity}</span>
+                          <span class="analysis-badge" style="background:{d.analysis.color};border-color:{d.analysis.color}">
+                            <i class="fas {d.analysis.icon}" style="font-size:0.5rem"></i>
+                            {d.analysis.safety || d.analysis.toxicity}
+                          </span>
                         </div>
                       {/if}
                       <div class="flex items-center gap-1.5 mt-0.5">
@@ -1794,6 +1692,8 @@
                       </div>
                       {#if objPalettes[d.label] && objPalettes[d.label].length > 0}
                         <div class="flex gap-0.5 mt-0.5">
+
+
                           {#each objPalettes[d.label].slice(0, 4) as pc}
                             <span class="pal-mini" style="background:{pc.hex}" title="{pc.name}: {pc.percentage.toFixed(0)}%"></span>
                           {/each}
@@ -1919,19 +1819,37 @@
           </div>
           <div class="upload-color-card" style="border-color: {focusColor.hex}" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}>
             <div class="flex items-center gap-3 w-full">
-              <div class="swatch-xl" style="background: {focusColor.hex}; box-shadow: 0 0 16px {focusColor.hex}88" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}></div>
+              <div class="swatch-xl" style="background: {focusColor.hex}; box-shadow: 0 0 16px {focusColor.hex}88" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}>
+                <span class="swatch-hex-lg" style="color:{contrastText(focusColor.hex)}">{focusColor.hex}</span>
+              </div>
               <div class="flex-1 min-w-0">
                 <div class="font-brut text-brut capitalize">{focusColor.name}</div>
-                <div class="text-brut-xs text-neo-darkgray font-mono">{focusColor.hex}</div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-brut-xs text-neo-darkgray font-mono">{focusColor.hex}</span>
+                  {#if focusColor.temperature}
+                    <span class="temp-chip" class:temp-warm={focusColor.temperature === 'warm'} class:temp-cool={focusColor.temperature === 'cool'} class:temp-neutral={focusColor.temperature === 'neutral' || focusColor.temperature === 'black' || focusColor.temperature === 'dark neutral'}>
+                      {focusColor.temperature === 'warm' ? 'Warm' : focusColor.temperature === 'cool' ? 'Cool' : 'Neutral'}
+                    </span>
+                  {/if}
+                </div>
                 {#if focusColor.r !== undefined}
                   <div class="text-brut-2xs text-neo-darkgray font-mono">RGB({focusColor.r},{focusColor.g},{focusColor.b})</div>
+                {/if}
+                {#if focusColor.whiteContrast}
+                  <div class="flex items-center gap-1 mt-0.5">
+                    <span class="contrast-badge" class:aaa={focusColor.wcagWhite === 'AAA'} class:aa={focusColor.wcagWhite === 'AA'} class:fail={focusColor.wcagWhite === 'Fail'}>
+                      WCAG {focusColor.wcagWhite}
+                    </span>
+                  </div>
                 {/if}
                 {#if focusObj}
                   <div class="text-brut-xs text-neo-darkgray capitalize mt-0.5">{focusObj}</div>
                   {#if objColors[0]?.analysis}
                     <div class="flex items-center gap-1 mt-0.5">
-                      <i class="fas {objColors[0].analysis.icon}" style="color:{objColors[0].analysis.color};font-size:0.65rem"></i>
-                      <span class="text-brut-xs" style="color:{objColors[0].analysis.color}">{objColors[0].analysis.advice}</span>
+                      <span class="analysis-badge" style="background:{objColors[0].analysis.color};border-color:{objColors[0].analysis.color}">
+                        <i class="fas {objColors[0].analysis.icon}" style="font-size:0.5rem"></i>
+                        {objColors[0].analysis.advice}
+                      </span>
                     </div>
                   {/if}
                 {/if}
@@ -1951,6 +1869,15 @@
                     <div class="sim-swatch" style="background: {sim.hex}"></div>
                     <span class="sim-label">{sim.label.slice(0,5)}</span>
                   </div>
+                {/each}
+              </div>
+            {/if}
+            {#if focusColor.harmonies?.length}
+              <div class="harmony-row">
+                {#each focusColor.harmonies as harm}
+                  {#each harm.colors as hc}
+                    <div class="harmony-dot" style="background:{hc.hex}" title="{harm.name}: {hc.hex}"></div>
+                  {/each}
                 {/each}
               </div>
             {/if}
@@ -1988,8 +1915,10 @@
                   </div>
                   {#if d.analysis}
                     <div class="flex items-center gap-1.5 mt-0.5">
-                      <i class="fas {d.analysis.icon}" style="color:{d.analysis.color};font-size:0.7rem"></i>
-                      <span class="font-brut text-brut-xs" style="color:{d.analysis.color}">{d.analysis.safety || d.analysis.toxicity}</span>
+                      <span class="analysis-badge" style="background:{d.analysis.color};border-color:{d.analysis.color}">
+                        <i class="fas {d.analysis.icon}" style="font-size:0.5rem"></i>
+                        {d.analysis.safety || d.analysis.toxicity}
+                      </span>
                     </div>
                   {/if}
                   <div class="flex items-center gap-2 mt-0.5">
@@ -2076,7 +2005,7 @@
           </div>
           <div class="flex flex-wrap gap-1.5">
             {#each objColors as d}
-              <span class="tag" style="--c:{getColorFor(d)}">{d.label} <span class="opacity-60 ml-1">{(d.score*100).toFixed(0)}</span>{#if d.analysis}<span class="ml-1 text-brut-2xs" style="color:{d.analysis.color}">· {d.analysis.safety || d.analysis.toxicity}</span>{/if}</span>
+              <span class="tag" style="--c:{getColorFor(d)}">{d.label} <span class="opacity-60 ml-1">{(d.score*100).toFixed(0)}</span>{#if d.analysis}<span class="analysis-badge ml-1" style="background:{d.analysis.color};border-color:{d.analysis.color};font-size:0.5rem;padding:0.04rem 0.2rem">{d.analysis.safety || d.analysis.toxicity}</span>{/if}</span>
             {/each}
           </div>
         </div>
@@ -2099,16 +2028,37 @@
               </div>
               <div class="desk-color-card" style="border-color: {focusColor.hex}" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}>
               <div class="desk-color-header">
-                <div class="swatch-lg" style="background: {focusColor.hex}; box-shadow: 0 0 12px {focusColor.hex}66" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}></div>
+                <div class="swatch-lg" style="background: {focusColor.hex}; box-shadow: 0 0 12px {focusColor.hex}66" onmouseenter={() => highlightActive = true} onmouseleave={() => highlightActive = false} onclick={() => { if (focusColor?.samplePos) highlightActive = !highlightActive; }}>
+                  <span class="swatch-hex" style="color:{contrastText(focusColor.hex)}">{shortHex(focusColor.hex)}</span>
+                </div>
                 <div class="flex-1 min-w-0">
                   <div class="font-brut text-brut-sm capitalize">{focusColor.name}</div>
-                  <div class="text-brut-xs text-neo-darkgray">{focusColor.hex} {#if focusColor.r !== undefined}({focusColor.r},{focusColor.g},{focusColor.b}){/if}</div>
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-brut-xs text-neo-darkgray font-mono">{focusColor.hex}</span>
+                    {#if focusColor.temperature}
+                      <span class="temp-chip" class:temp-warm={focusColor.temperature === 'warm'} class:temp-cool={focusColor.temperature === 'cool'} class:temp-neutral={focusColor.temperature === 'neutral' || focusColor.temperature === 'black' || focusColor.temperature === 'dark neutral'}>
+                        {focusColor.temperature === 'warm' ? 'Warm' : focusColor.temperature === 'cool' ? 'Cool' : 'Neutral'}
+                      </span>
+                    {/if}
+                  </div>
+                  {#if focusColor.r !== undefined}
+                    <div class="text-brut-2xs text-neo-darkgray font-mono">RGB({focusColor.r},{focusColor.g},{focusColor.b})</div>
+                  {/if}
+                  {#if focusColor.whiteContrast}
+                    <div class="flex items-center gap-1 mt-0.5">
+                      <span class="contrast-badge" class:aaa={focusColor.wcagWhite === 'AAA'} class:aa={focusColor.wcagWhite === 'AA'} class:fail={focusColor.wcagWhite === 'Fail'}>
+                        WCAG {focusColor.wcagWhite}
+                      </span>
+                    </div>
+                  {/if}
                   {#if focusObj}
-                    <div class="text-brut-xs text-neo-darkgray capitalize">{focusObj}</div>
+                    <div class="text-brut-xs text-neo-darkgray capitalize mt-0.5">{focusObj}</div>
                     {#if objColors[0]?.analysis}
                       <div class="flex items-center gap-1 mt-0.5">
-                        <i class="fas {objColors[0].analysis.icon}" style="color:{objColors[0].analysis.color};font-size:0.6rem"></i>
-                        <span class="text-brut-xs" style="color:{objColors[0].analysis.color}">{objColors[0].analysis.advice}</span>
+                        <span class="analysis-badge" style="background:{objColors[0].analysis.color};border-color:{objColors[0].analysis.color}">
+                          <i class="fas {objColors[0].analysis.icon}" style="font-size:0.5rem"></i>
+                          {objColors[0].analysis.advice}
+                        </span>
                       </div>
                     {/if}
                   {/if}
@@ -2128,6 +2078,15 @@
                       <div class="sim-swatch" style="background: {sim.hex}"></div>
                       <span class="sim-label">{sim.label.slice(0,5)}</span>
                     </div>
+                  {/each}
+                </div>
+              {/if}
+              {#if focusColor.harmonies?.length}
+                <div class="harmony-row">
+                  {#each focusColor.harmonies as harm}
+                    {#each harm.colors as hc}
+                      <div class="harmony-dot" style="background:{hc.hex}" title="{harm.name}: {hc.hex}"></div>
+                    {/each}
                   {/each}
                 </div>
               {/if}
@@ -2155,7 +2114,9 @@
             <div class="desk-dets-list">
               {#each objColors as d, i (d.label + d.score + i)}
                 <div role="button" tabindex="0" class="desk-det-item" class:selected={selectedObj?.label === d.label} style="border-left-color: {d.color.hex}" onclick={() => selectObject(d)} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') selectObject(d); }}>
-                  <span class="color-swatch-mini" style="background: {d.color.hex}; box-shadow: 0 0 8px {d.color.hex}66"></span>
+                  <span class="color-swatch-mini" style="background: {d.color.hex}; box-shadow: 0 0 8px {d.color.hex}66">
+                    <span class="swatch-mini-text" style="color:{contrastText(d.color.hex)}">{shortHex(d.color.hex)}</span>
+                  </span>
                   <div class="flex-1 min-w-0">
                     <div class="flex items-center gap-1">
                       <span class="font-brut text-brut-xs truncate capitalize">{d.label}</span>
@@ -2163,8 +2124,10 @@
                     </div>
                     {#if d.analysis}
                       <div class="flex items-center gap-1 mt-0.5">
-                        <i class="fas {d.analysis.icon}" style="color:{d.analysis.color};font-size:0.6rem"></i>
-                        <span class="text-brut-xs" style="color:{d.analysis.color}">{d.analysis.safety || d.analysis.toxicity}</span>
+                        <span class="analysis-badge" style="background:{d.analysis.color};border-color:{d.analysis.color}">
+                          <i class="fas {d.analysis.icon}" style="font-size:0.5rem"></i>
+                          {d.analysis.safety || d.analysis.toxicity}
+                        </span>
                       </div>
                     {/if}
                     <div class="flex items-center gap-1.5 mt-0.5">
@@ -2177,6 +2140,18 @@
                       <div class="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
                         <span class="text-brut-2xs text-neo-darkgray font-mono">RGB({d.color.r},{d.color.g},{d.color.b})</span>
                         <span class="text-brut-2xs text-neo-darkgray font-mono">HSL({d.color.hsl.h}°{d.color.hsl.s}%{d.color.hsl.l}%)</span>
+                      </div>
+                      <div class="flex items-center gap-1.5 mt-0.5">
+                        {#if d.color.temperature}
+                          <span class="temp-chip" class:temp-warm={d.color.temperature === 'warm'} class:temp-cool={d.color.temperature === 'cool'} class:temp-neutral={d.color.temperature === 'neutral' || d.color.temperature === 'black' || d.color.temperature === 'dark neutral'}>
+                            {d.color.temperature === 'warm' ? 'Warm' : d.color.temperature === 'cool' ? 'Cool' : 'Neutral'}
+                          </span>
+                        {/if}
+                        {#if d.color.whiteContrast}
+                          <span class="contrast-badge" class:aaa={d.color.wcagWhite === 'AAA'} class:aa={d.color.wcagWhite === 'AA'} class:fail={d.color.wcagWhite === 'Fail'}>
+                            WCAG {d.color.wcagWhite}
+                          </span>
+                        {/if}
                       </div>
                     {/if}
                     {#if d.color.confusion?.length}
@@ -2352,7 +2327,8 @@
     box-shadow: 2px 2px 0 rgba(0,0,0,0.3);
   }
   .cam-section-divider { height: 2px; background: rgba(255,255,255,0.15); margin: 0; }
-  .swatch-lg { width: 44px; height: 44px; border: 2px solid #0a0a0a; flex-shrink: 0; border-radius: 4px; }
+  .swatch-lg { width: 44px; height: 44px; border: 2px solid #0a0a0a; flex-shrink: 0; border-radius: 4px; display:flex; align-items:center; justify-content:center; }
+  .swatch-hex { font: 700 0.45rem/1 'Space Grotesk', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.02em; opacity:0.9; }
   .desk-color-section { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; }
   .desk-color-tag {
     display: inline-flex; align-items: center; align-self: flex-start;
@@ -2376,7 +2352,8 @@
     padding: 0.65rem 0.75rem; background: #fefefe; border: 3px solid;
     box-shadow: 4px 4px 0 #0a0a0a;
   }
-  .swatch-xl { width: 52px; height: 52px; border: 3px solid #0a0a0a; flex-shrink: 0; border-radius: 6px; }
+  .swatch-xl { width: 52px; height: 52px; border: 3px solid #0a0a0a; flex-shrink: 0; border-radius: 6px; display:flex; align-items:center; justify-content:center; }
+  .swatch-hex-lg { font: 700 0.55rem/1 'Space Grotesk', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.02em; opacity:0.9; }
   .upload-icon-btn {
     width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
     border: 2px solid #0a0a0a; background: #fefefe; cursor: pointer; font-size: 0.75rem; flex-shrink: 0; transition: all 0.15s;
@@ -2423,6 +2400,7 @@
   .retrain-link { font-size: 0.55rem; font-weight: 700; text-transform: uppercase; color: #ff6b35; text-decoration: underline wavy; cursor: pointer; letter-spacing: 0.03em; transition: color 0.15s; }
   .retrain-link:hover { color: #ff0033; }
   .cvd-chip { font-size: 0.55rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; padding: 0.05rem 0.3rem; border: 1px solid #0a0a0a; background: rgba(255,0,51,0.08); color: #0a0a0a; line-height: 1.2; }
+  .analysis-badge { display:inline-flex; align-items:center; gap:0.2rem; padding:0.08rem 0.4rem; border:1px solid; font:700 0.55rem/1 'Space Grotesk', system-ui, sans-serif; text-transform:uppercase; letter-spacing:0.02em; color:#fff; box-shadow:1px 1px 0 #0a0a0a; }
   .text-brut-2xs { font-size: 0.55rem; }
 
   .cam-palette { position: absolute; bottom: 0; left: 0; right: 0; z-index: 25; padding: 0.75rem; background: rgba(254,254,254,0.97); border-top: 4px solid #0a0a0a; box-shadow: 0 -4px 0 #0a0a0a; backdrop-filter: blur(8px); }
@@ -2517,7 +2495,8 @@
   }
   .detection-item:hover { border-color: #0a0a0a; background: rgba(255,215,0,0.05); transform: translateX(2px); }
   .detection-item.selected { border-color: #ffd700; background: linear-gradient(90deg, rgba(255,215,0,0.1), transparent); box-shadow: 3px 3px 0 #0a0a0a; }
-  .color-swatch-mini { width: 22px; height: 22px; flex-shrink: 0; border: 2px solid #0a0a0a; border-radius: 2px; }
+  .color-swatch-mini { width: 22px; height: 22px; flex-shrink: 0; border: 2px solid #0a0a0a; border-radius: 2px; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+  .swatch-mini-text { font: 700 0.35rem/1 'Space Grotesk', system-ui, sans-serif; text-transform: uppercase; letter-spacing: 0.01em; opacity:0.85; }
   .model-badge { font-size: 0.6rem; line-height: 1; padding: 0.1rem 0.35rem; border: 1px solid #0a0a0a; background: #fefefe; }
   .conf-bar { width: 48px; height: 7px; border: 2px solid #0a0a0a; background: #e0e0e0; overflow: hidden; border-radius: 2px; }
   .conf-fill { height: 100%; transition: width 0.3s ease; }
@@ -2598,4 +2577,32 @@
   .scene-chip.active { background: #39ff14; }
   .scene-swatch { width: 22px; height: 22px; border: 2px solid #0a0a0a; flex-shrink: 0; }
   .scene-chip-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+  .temp-chip {
+    display: inline-flex; align-items: center; padding: 0.08rem 0.35rem;
+    font: 700 0.5rem/1 'Space Grotesk', system-ui, sans-serif; text-transform: uppercase;
+    letter-spacing: 0.03em; border: 1px solid #0a0a0a; border-radius: 1px;
+  }
+  .temp-warm { background: #ff6b3522; color: #ff6b35; }
+  .temp-cool { background: #00e5ff22; color: #0099cc; }
+  .temp-neutral { background: #88888822; color: #666; }
+
+  .contrast-badge {
+    display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.06rem 0.3rem;
+    font: 700 0.5rem/1 'Space Grotesk', system-ui, sans-serif; text-transform: uppercase;
+    letter-spacing: 0.03em; border: 1px solid #0a0a0a; border-radius: 1px;
+  }
+  .contrast-badge.aaa { background: #39ff1433; color: #006600; }
+  .contrast-badge.aa { background: #ffd70033; color: #996600; }
+  .contrast-badge.fail { background: #ff003333; color: #cc0000; }
+
+  .harmony-row {
+    display: flex; gap: 0.2rem; padding-top: 0.3rem; margin-top: 0.3rem;
+    border-top: 1px solid rgba(10,10,10,0.08); flex-wrap: wrap;
+  }
+  .harmony-dot {
+    width: 12px; height: 12px; border: 1px solid #0a0a0a; border-radius: 50%;
+    flex-shrink: 0; cursor: help; transition: transform 0.15s;
+  }
+  .harmony-dot:hover { transform: scale(1.4); }
 </style>

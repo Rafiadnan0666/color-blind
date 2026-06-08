@@ -66,7 +66,7 @@
   }
 
   function getModeIcon(mode) {
-    const icons = { fusion: 'fa-compress-alt', coco: 'fa-globe', currency: 'fa-money-bill-wave', drug: 'fa-tablets', traffic_light: 'fa-traffic-light', accessibility: 'fa-universal-access' };
+    const icons = { coco: 'fa-globe' };
     return icons[mode] || 'fa-cube';
   }
 </script>

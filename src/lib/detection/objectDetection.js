@@ -1,18 +1,11 @@
 import { loadTFModel, detectTF, getTFColor } from './tfDetection';
-import {
-  loadMobileNetModel,
-  loadAllMobileNetModels,
-  detectMobileNet,
-  getMobileNetColor,
-  getMobileNetModelKeys
-} from './mobilenetDetection';
+
 function hashColor(str) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
   return `hsl(${Math.abs(hash) % 360}, 65%, 50%)`;
 }
 let tfModelLoaded = false;
-let mobilenetModelsLoaded = new Set();
 export async function loadModel() {
   if (!tfModelLoaded) {
     tfModelLoaded = true;
@@ -22,11 +15,6 @@ export async function loadModel() {
       console.error('[MODEL_LOAD_ERROR] COCO-SSD:', e?.message || e);
     }
   }
-}
-export async function loadMobileNetModelForMode(mode) {
-  if (mobilenetModelsLoaded.has(mode)) return;
-  mobilenetModelsLoaded.add(mode);
-  await loadMobileNetModel(mode);
 }
 
 export async function detectObjects(source) {

@@ -8,7 +8,7 @@
   let highlightEl = $state(null);
   let highlightRect = $state(null);
   let backdropDone = $state(false);
-  const totalSteps = 5;
+  const totalSteps = 3;
 
   const steps = [
     {
@@ -20,26 +20,10 @@
       placement: 'center',
     },
     {
-      title: 'Switch Detection Modes',
-      icon: 'fa-grid-2',
+      title: 'Object Detection',
+      icon: 'fa-globe',
       color: '#00e5ff',
-      desc: 'Tap the mode button to switch between COCO, Currency, Drug, Traffic Light, Meat, Mushroom and more detection engines.',
-      selector: '.mode-selector, [class*="mode-select"]',
-      placement: 'bottom',
-    },
-    {
-      title: 'Meat Freshness Detection',
-      icon: 'fa-drumstick-bite',
-      color: '#ff6b35',
-      desc: 'Use Meat mode to check if meat is Fresh, Half-Fresh, or Spoiled. AI voice announces safety warnings with severity alerts.',
-      selector: null,
-      placement: 'center',
-    },
-    {
-      title: 'Mushroom Detection',
-      icon: 'fa-leaf',
-      color: '#8B4513',
-      desc: 'Identify poisonous mushrooms like Death Cap and Destroying Angels. Real-time toxicity alerts help you stay safe.',
+      desc: 'COCO-SSD model detects 90 classes of common objects. Point your camera or upload an image to start.',
       selector: null,
       placement: 'center',
     },
