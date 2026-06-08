@@ -1,44 +1,203 @@
-# ClrBlind — Color Blindness Detection & Accessibility App
+# ClrBlind — AI-Powered Color Vision Accessibility App
 
-AI-powered browser application for color blindness detection, object recognition, color analysis, and accessibility — all running **100% client-side** using ONNX Runtime Web and TensorFlow.js.
+**ClrBlind** is a privacy-first, fully client-side web application that helps users with color vision deficiencies (CVD) navigate a color-dependent world. It combines real-time object detection, color analysis, OCR, and scene understanding — all running inside the browser using ONNX Runtime Web and TensorFlow.js. **No images ever leave your device.**
+
+> Built with SvelteKit 2, Svelte 5 runes, Supabase, and a neo-brutalist design system.
+
+---
+
+## Why ClrBlind?
+
+Around 300 million people worldwide have some form of color blindness. Everyday tasks — reading traffic lights, identifying currency, checking meat freshness, distinguishing pills — can be challenging. ClrBlind puts a pocket AI assistant in the browser that describes the visual world aloud and on-screen, with zero server uploads.
+
+---
 
 ## Features
 
-- **9 Detection Modes**: Fusion (all models simultaneously), COCO-SSD, SSD Lens, Currency (7 Indonesian rupiah denominations), Medicine Detection (paracetamol, panadol, amoxicillin, vitamin C), Traffic Light Detection, Accessibility Signs (crosswalk/stop/speedlimit/trafficlight), Meat Freshness (Fresh/Half-Fresh/Spoiled), Mushroom Toxicity (5 poisonous species)
-- **Color Analysis**: 125+ named colors, hex/RGB/HSV/HSL, palette extraction with spatial positions, CVD simulation (protanopia/deuteranopia/tritanopia)
-- **Color Picker**: Click on camera or uploaded image to sample color; live cursor preview; modal with save option
-- **OCR Scanner**: Text extraction via Tesseract.js with copy and history
-- **AI Assistant**: On-device QnA model answers questions about colors, accessibility, and app features
-- **Scene Classification**: Identifies garden/kitchen/orchard/supermarket environments
-- **Voice Feedback**: SpeechSynthesis announces detected objects, colors, meat safety, and mushroom toxicity
-- **Saved Colors & Objects**: Full CRUD with inline editing and detail modals
-- **Scan History**: Paginated history with search
-- **Favorites**: Save and manage favorites
-- **Notifications**: In-app notification panel
-- **Theme System**: Light, Dark, Grey, and System themes with CSS custom properties
-- **CVD Side-by-Side**: Compare normal vision with protanopia simulation on live camera/upload
-- **Profile**: Avatar, CVD mode preference, voice toggle, performance mode (quality/balanced/performance)
-- **Interactive Tour**: Onboarding with element highlighting for first-time users
+### Detection Modes
+
+All detection runs on-device. Models are loaded once and cached for the session.
+
+| Mode | What It Detects |
+|------|----------------|
+| **Fusion** | All models simultaneously — union of all detections |
+| **COCO-SSD** | 80 everyday objects: person, car, bottle, apple, dog, chair, etc. |
+| **Currency** | 7 Indonesian rupiah denominations: Rp 1.000, Rp 2.000, Rp 5.000, Rp 10.000, Rp 20.000, Rp 50.000, Rp 100.000 |
+| **Medicine** | Paracetamol, Panadol, Amoxicillin, Vitamin C |
+| **Traffic Light** | Red light, Green light, Yellow light |
+| **Accessibility Signs** | Crosswalk, Speed limit, Stop sign, Traffic light |
+| **Meat Freshness** | Fresh, Half-fresh, Spoiled |
+| **Mushroom Toxicity** | 5 poisonous species: Autumn Skullcap, Death Cap, Destroying Angels, False Morel, Poison Fire Coral |
+
+### Color Analysis Engine
+
+- **Color naming** — 183+ named colors mapped from hex/RGB/HSV/HSL/CIELAB
+- **Dominant palette extraction** — with spatial position data from uploaded images or camera frames
+- **CVD simulation** — see the world through protanopia, deuteranopia, or tritanopia filters
+- **Side-by-side view** — split-screen comparison of normal vision vs. protanopia simulation (live camera or image)
+- **Color picker** — click anywhere on the camera feed or uploaded image to sample a color; live cursor preview; save to collection
+- **Contour detection** — Sobel edge detection highlights object boundaries
+- **WCAG contrast ratios** — accessibility-aware color contrast evaluation
+- **Harmonies** — complementary, analogous, triadic, and tetradic color schemes
+
+### Scene Classification
+
+Identifies the environment from 4 categories: garden, orchard, indoor kitchen, supermarket.
+
+### OCR Scanner
+
+- Text extraction via Tesseract.js (14 languages)
+- Copy-to-clipboard with one tap
+- Full scan history with search
+
+### AI Assistant
+
+- On-device QnA model answers questions about colors, accessibility, and app features
+- Falls back to browser-native Language Model API (Gemini Nano) when available
+- Chat history preserved
+
+### Voice Feedback
+
+- Web SpeechSynthesis announces detected objects, colors, meat safety, and mushroom toxicity
+- Configurable voice and rate
+- Toggle on/off from profile
+
+### Data Management
+
+| Feature | Details |
+|---------|---------|
+| **Saved Colors** | CRUD with inline editing, hex copy, detail modals |
+| **Saved Objects** | CRUD with inline editing, notes, detail modals |
+| **Favorites** | Save any detection; manage from a dedicated page |
+| **Scan History** | Paginated, searchable, with mode/object/confidence metadata |
+| **Object Analytics** | Tracks total detections, average confidence, last seen per object |
+| **OCR History** | Full text and language metadata, paginated |
+| **Assistant History** | Question-answer pairs, paginated |
+
+### User Experience
+
+- **Camera & upload** — live camera feed or image file (PNG, JPG, WebP, GIF, BMP, TIFF)
+- **Batch processing** — upload multiple images, process sequentially, swtich between results
+- **Magnifier** — live zoom with grid overlay for fine detail inspection
+- **Interactive tour** — 3-step onboarding with element highlighting for first-time users
+- **Notifications** — in-app panel with read/unread status, badge counts; transactional emails via Resend
+- **Feedback** — rate the app, submit comments
+- **Themes** — Light, Dark, Grey, and System themes via CSS custom properties
+- **Performance modes** — Quality (400ms interval), Balanced (800ms), Performance (1200ms) for battery/device tuning
+
+---
 
 ## ML Models
 
-### ONNX Runtime Web (WASM)
+### TensorFlow.js (Active)
 
-| Mode | Input | Backbone | Classes |
-|------|-------|----------|---------|
-| Currency | 640×640 | YOLOv8n | Rp 1.000, Rp 2.000, Rp 5.000, Rp 10.000, Rp 20.000, Rp 50.000, Rp 100.000 |
-| Medicine | 640×640 | YOLOv8n | Paracetamol, Panadol, Amoxicillin, Vitamin C |
-| Traffic Light | 640×640 | YOLOv8n | Red Light, Green Light, Yellow Light |
-| Accessibility | 640×640 | YOLOv8n | Crosswalk, Speed Limit, Stop Sign, Traffic Light |
-| Meat Freshness | 224×224 | MobileNetV3 | Fresh, Half-Fresh, Spoiled |
-| Mushroom | 224×224 | MobileNetV3 | Autumn Skullcap, Death Cap, Destroying Angels, False Morel, Poison Fire Coral |
+| Model | Backend | Input | Classes |
+|-------|---------|-------|---------|
+| COCO-SSD | MobileNetV2 | flexible | 80 COCO classes |
+| Scene Classifier | TFJS Graph | 224×224 RGB | garden, orchard, indoor_kitchen, supermarket |
+| QnA | MobileNet-based | text | Question answering |
 
-### TensorFlow.js
+### ONNX Runtime Web (Shipped, WASM)
 
-| Mode | Model | Classes |
-|------|-------|---------|
-| COCO-SSD / Fusion | MobileNetV2 | 80 COCO classes (person, car, bottle, etc.) |
-| Scene | TFJS Graph | garden, orchard, indoor_kitchen, supermarket |
+| Model | Architecture | Input | Classes |
+|-------|-------------|-------|---------|
+| Currency | YOLOv8n | 640×640 | 7 rupiah denominations |
+| Medicine | YOLOv8n | 640×640 | 4 pill types |
+| Traffic Light | YOLOv8n | 640×640 | Red, Green, Yellow |
+| Accessibility | YOLOv8n | 640×640 | Crosswalk, Speed Limit, Stop Sign, Traffic Light |
+| Meat Freshness | MobileNetV3 | 224×224 | Fresh, Half-Fresh, Spoiled |
+| Mushroom | MobileNetV3 | 224×224 | 5 poisonous species |
+
+All ONNX models use WASM SIMD threading for near-native inference speed.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Framework** | SvelteKit 2 + Svelte 5 runes (`$state`, `$derived`, `$effect`) |
+| **Build** | Vite 8 |
+| **CSS** | Tailwind CSS 3.4 + neo-brutalist custom design system |
+| **Icons** | Font Awesome 6 (CDN) |
+| **Font** | Space Grotesk |
+| **ML (Object Detection)** | TensorFlow.js 4 + COCO-SSD (WebGL) |
+| **ML (YOLO Models)** | ONNX Runtime Web 1.26 (WASM + SIMD + threading) |
+| **OCR** | Tesseract.js 6 (Web Worker) |
+| **Voice** | Web SpeechSynthesis API |
+| **Database** | Supabase (PostgreSQL) |
+| **Auth** | Supabase Auth (email/password, Google OAuth, magic link) |
+| **Email** | Resend API via Supabase Edge Function (Deno) |
+| **Deployment** | Vercel (zero-config) / Netlify |
+
+---
+
+## Project Structure
+
+```
+src/
+  lib/
+    detection/
+      colorDetection.js       — Color analysis engine (naming, palette, harmonics, CVD)
+      objectDetection.js       — COCO-SSD detection wrapper
+      tfDetection.js           — TensorFlow.js loader/detector
+      sceneClassifier.js       — TFJS scene classification
+      foodSafety.js            — Meat & mushroom safety data
+      qnaDetection.js          — On-device QnA inference
+      yoloDetection.js         — ONNX YOLO engine (preprocess, infer, decode)
+      mobilenetDetection.js    — ONNX model registry
+      analysis.js              — Detection result analysis
+    supabase/
+      client.js                — Browser Supabase client
+      server.js                — Server SSR Supabase client
+      db.js                    — All CRUD operations (340 lines)
+      notifications.js         — Notification helpers
+    stores/
+      auth.js                  — User and session stores
+      settings.js              — Derived settings stores
+    components/
+      ModeSheet.svelte         — Detection mode picker
+      BottomNav.svelte         — Mobile bottom navigation
+      FavoritesPanel.svelte    — Favorites list modal
+      NotificationsPanel.svelte — Notifications list modal
+      ScanHistoryList.svelte   — Paginated scan history
+      TourGuide.svelte         — Onboarding tour with highlighting
+    utils/
+      voice.js                 — SpeechSynthesis wrapper
+      notifications.js         — Browser notification helpers
+  routes/
+    +page.svelte               — Landing page
+    +layout.svelte             — App shell (header, nav, theme)
+    detects/+page.svelte       — Main detection UI (camera + upload, all modes)
+    dashboard/+page.svelte     — User dashboard with feature cards
+    profile/+page.svelte       — Profile, settings, preferences
+    assistant/+page.svelte     — AI chat assistant
+    ocr/+page.svelte           — OCR scanner
+    history/+page.svelte       — Scan history page
+    favorites/+page.svelte     — Favorites page
+    saved-colors/+page.svelte  — Saved colors CRUD
+    saved-objects/+page.svelte — Saved objects CRUD
+    notifications/+page.svelte — Notifications page
+    auth/
+      login/                   — Login form
+      register/                — Registration
+      forgot-password/        — Password reset request
+      reset-password/         — New password form
+      callback/               — OAuth callback (server)
+      confirm/                — Email verification (server)
+      logout/                 — Logout handler (server)
+      oauth/google/           — Google OAuth redirect (server)
+static/
+  models/                      — 6 ONNX model files (.onnx)
+  model_scene/                 — TFJS scene classifier (model.json + shards)
+  model_tfjs/                 — Additional TFJS model artifacts
+  wasm/                        — ONNX Runtime Web WASM binaries (8 variants)
+supabase/
+  functions/
+    send-notification-email/   — Edge Function (Deno, Resend API)
+```
+
+---
 
 ## Quick Start
 
@@ -47,68 +206,88 @@ npm install
 npm run dev
 ```
 
-## Build
+### Environment
+
+Create `.env.local` in the project root:
+
+```env
+PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
+
+---
+
+## Build & Deploy
 
 ```bash
 npm run build
 npm run preview
 ```
 
-## Tech Stack
+Supports **Vercel** and **Netlify** zero-config deployment. WASM MIME types and Cross-Origin headers are pre-configured in `vercel.json` and `netlify.toml`.
 
-- **SvelteKit 2** with Svelte 5 runes ($state, $derived, $effect)
-- **TensorFlow.js 4** — COCO-SSD object detection
-- **ONNX Runtime Web** — YOLO model inference (WASM + threaded)
-- **Tesseract.js** — OCR text extraction
-- **Supabase** — Auth, database, notifications
-- **Font Awesome 7** — Icons
-- **Neo-brutalist Design** — Custom CSS with 4-theme system
+### Build Notes
 
-## Project Structure
+- ONNX Runtime Web requires WASM files in `static/wasm/` to be served with `Content-Type: application/wasm`
+- TensorFlow.js uses WebGL backend — ensure browser supports WebGL 2.0
+- Tesseract.js runs in a Web Worker — CSP allows `blob:` workers
 
-```
-src/
-  lib/
-    detection/
-      yoloDetection.js      — ONNX Runtime Web engine (load, preprocess, decode)
-      tfDetection.js        — TensorFlow.js COCO-SSD engine
-      mobilenetDetection.js — Wrapper around YOLO for all ONNX models
-      colorDetection.js     — Color analysis (naming, palette, CVD simulation)
-      sceneClassifier.js    — TFJS scene classification
-      foodSafety.js         — Meat & mushroom analysis
-      qnaDetection.js       — TensorFlow.js QnA
-    supabase/db.js          — Database CRUD operations
-    stores/auth.js          — Auth store
-    components/
-      TourGuide.svelte      — Interactive onboarding with element highlighting
-      ModeSheet.svelte      — Detection mode picker sheet
-      BottomNav.svelte      — Mobile navigation
-  routes/
-    detects/+page.svelte    — Main detection UI (camera + upload, all modes)
-    dashboard/+page.svelte  — User dashboard with colorful cards
-    profile/+page.svelte    — Profile & settings
-    saved-colors/           — Saved colors CRUD
-    saved-objects/          — Saved objects CRUD
-    history/                — Scan history
-    favorites/              — Favorites list
-    notifications/          — Notifications panel
-    assistant/              — AI assistant chat
-    ocr/                    — OCR scanner
-static/
-  models/                   — 6 ONNX model files (.onnx)
-  model_scene/              — TFJS scene classifier
-  wasm/                     — ONNX Runtime Web WASM binaries
-```
+---
 
-## Environment
+## Database Schema
 
-Create `.env.local`:
+The app uses Supabase PostgreSQL with 11 tables:
 
-```env
-PUBLIC_SUPABASE_URL=your_supabase_url
-PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
+| Table | Purpose |
+|-------|---------|
+| `ScanHistory` | Detection results with mode, object name, color, confidence |
+| `Favorites` | Bookmarked detections |
+| `SavedColors` | User's color collection with hex/RGB |
+| `SavedObjects` | User's object collection with notes |
+| `ObjectAnalytics` | Aggregated detection statistics (RPC-driven) |
+| `Notifications` | In-app notification feed |
+| `Feedback` | User ratings and comments |
+| `OCRHistory` | OCR extraction history |
+| `AssistantHistory` | Q&A chat history |
+| `UserSettings` | Feature toggles, theme, performance mode |
+| `UserProfile` | Name, avatar, language, CVD preferences |
 
-## Deployment
+All tables reference `auth.users` via `userid` (UUID) with client-side rate limiting (10 ops / 2s window).
 
-Supports Vercel and Netlify zero-config deployment. WASM MIME types are configured via `vercel.json` / `netlify.toml`. Ensure `static/wasm/` files are served with `application/wasm` MIME type.
+---
+
+## Auth Providers
+
+- **Email/Password** — standard registration and login
+- **Google OAuth** — one-tap sign-in
+- **Magic Link** — passwordless email login
+- **Password Reset** — forgot password flow with recovery email
+
+Session management uses `@supabase/ssr` with cookie-based sessions and real-time `onAuthStateChange` listeners.
+
+---
+
+## Performance Modes
+
+Three levels adapt the detection interval to device capability:
+
+- **Quality** (400ms) — fastest detection, higher battery use
+- **Balanced** (800ms) — default, good trade-off
+- **Performance** (1200ms) — slower detection, lower battery use
+
+---
+
+## Security & Privacy
+
+- **100% client-side inference** — camera frames and uploaded images are never transmitted
+- **Supabase only stores metadata** — object names, colors, confidence scores, timestamps
+- **CSP headers** configured for safe WASM execution (`wasm-unsafe-eval`, `blob:`)
+- **Cross-Origin policies** set for WASM and model file serving
+- **Input sanitization** — all user inputs are stripped of `<>` and truncated before storage
+- **Rate limiting** — client-side throttling prevents rapid-fire API calls
+
+---
+
+## License
+
+MIT
