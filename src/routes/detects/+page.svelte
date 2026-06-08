@@ -2,8 +2,9 @@
   import { onMount, tick } from 'svelte';
   import { fly, scale } from 'svelte/transition';
   import { loadModel, detectObjects, getColor } from '$lib/detection/objectDetection';
-  import { loadTFModel, detectTF, getTFColor } from '$lib/detection/tfDetection';
+  import { loadTFModel, detectTF, getTFColor, isTfBad } from '$lib/detection/tfDetection';
   import { loadMobileNetModel, loadAllMobileNetModels, detectMobileNet, getMobileNetColor, getMobileNetModelKeys } from '$lib/detection/mobilenetDetection';
+  import { isBadModel, getBadModels } from '$lib/detection/yoloDetection';
   import { sampleRegionColor, extractPalette, detectContour } from '$lib/detection/colorDetection';
   import { classifyScene, getSceneDescription } from '$lib/detection/sceneClassifier';
   import ModeSheet from '$lib/components/ModeSheet.svelte';
@@ -40,8 +41,13 @@
   let allFusionResults = [];
   const allModels = ['fusion', 'coco', 'drug', 'currency', 'accessibility', 'traffic_light'];
   const mobilenetModels = ['accessibility', 'currency', 'drug', 'traffic_light', 'meat', 'mushroom'];
+  let availableModels = $derived(allModels.filter(m => {
+    if (m === 'fusion') return fusionModels.length > 1;
+    if (m === 'coco') return !isTfBad();
+    return !isBadModel(m);
+  }));
   const tfModels = ['coco'];
-  const fusionModels = ['coco', ...mobilenetModels];
+  let fusionModels = $derived(['coco', ...mobilenetModels].filter(m => (m === 'coco' ? !isTfBad() : !isBadModel(m))));
   let cachedFrameCanvas = null;
   let scenePalette = $state([]);
 
@@ -64,6 +70,8 @@
   let statusToastMsg = $state('');
   let statusToastType = $state('success');
   let loadProgress = $state(0);
+  let cameraFacing = $state('environment');
+  let cameraFlipping = $state(false);
 
   let uploadedImages = $state([]);
   let currentImageIdx = $state(-1);
@@ -81,6 +89,8 @@
   let _bufCanvas = null;
   let skipFrameCounter = 0;
   let tabHidden = false;
+  let modelsLoaded = false;
+  let modelLoadPromise = null;
 
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
@@ -88,8 +98,8 @@
       if (tabHidden) {
         wasDetecting = detecting;
         stopLoop();
-      } else if (useCamera) {
-        init();
+      } else if (useCamera && video && video.srcObject) {
+        startLoop();
       }
     });
   }
@@ -124,7 +134,7 @@
       loadProgress = 100; loadStage = LOAD_STAGES[4]; clearLoadTimeout();
       setTimeout(() => { loadProgress = 0; loadStage = ''; }, 600);
     }
-    else if (status && status.includes('Error') || status?.includes('denied') || status?.includes('fail')) {
+    else if (status && (status.includes('Error') || status?.includes('denied') || status?.includes('fail'))) {
       clearLoadTimeout();
       loadProgress = 0; loadStage = '';
     }
@@ -175,49 +185,63 @@
     }
     clearLoadTimeout();
     try {
-      await reloadModels();
+      await ensureModelsLoaded();
     } catch (e) {
       console.warn('Model reload error:', e);
       toast('Some models failed to load', 'error');
     }
     if (swId !== modeSwitchId) return;
     status = '';
-    if (useCamera && video) {
-      const detInterval = $perfMode === 'performance' ? 1200 : $perfMode === 'quality' ? 400 : 800;
-      detectTimer = setInterval(() => runDetectionFrame(true), detInterval);
-      animId = requestAnimationFrame(drawLoop);
+    if (useCamera && video && video.srcObject) {
+      startLoop();
     } else if (imageSrc && currentImageIdx >= 0) {
       detectId++;
       runDetect(detectId, currentImageIdx);
     }
   }
 
-  async function reloadModels() {
+  async function ensureModelsLoaded() {
+    if (modelsLoaded) return;
+    if (modelLoadPromise) return modelLoadPromise;
+    
     status = 'Load';
-    const modelsToLoad = [];
-    if (engineMode === 'fusion') {
-      modelsToLoad.push(loadTFModel().catch(e => {
-      console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-      return null;
-    }));
-     modelsToLoad.push(loadAllMobileNetModels().catch(e => {
-      console.warn('[INIT] MobileNet models failed:', e?.message);
-      return null;
-    }));
-    } else if (tfModels.includes(engineMode)) {
-      modelsToLoad.push(loadTFModel().catch(e => {
-      console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-      return null;
-    }));
-    } else if (mobilenetModels.includes(engineMode)) {
-      modelsToLoad.push(loadMobileNetModel(engineMode));
-    } else {
-      modelsToLoad.push(loadTFModel().catch(e => {
-      console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-      return null;
-    }));
-    }
-    await Promise.allSettled(modelsToLoad);
+    modelLoadPromise = (async () => {
+      try {
+        const modelsToLoad = [];
+        if (engineMode === 'fusion') {
+          modelsToLoad.push(loadTFModel().catch(e => { console.warn('TF model failed:', e); return null; }));
+          modelsToLoad.push(loadAllMobileNetModels().catch(e => { console.warn('MobileNet models failed:', e); return null; }));
+        } else if (tfModels.includes(engineMode)) {
+          modelsToLoad.push(loadTFModel().catch(e => { console.warn('TF model failed:', e); return null; }));
+        } else if (mobilenetModels.includes(engineMode)) {
+          modelsToLoad.push(loadMobileNetModel(engineMode).catch(e => { console.warn('MobileNet model failed:', e); return null; }));
+        } else {
+          modelsToLoad.push(loadTFModel().catch(e => { console.warn('TF model failed:', e); return null; }));
+        }
+        await Promise.allSettled(modelsToLoad);
+        modelsLoaded = true;
+        status = '';
+        const fallbacks = ['coco', 'fusion', ...mobilenetModels];
+        if ((engineMode !== 'fusion' && isBadModel(engineMode)) || (engineMode === 'coco' && isTfBad())) {
+          const next = fallbacks.find(m => {
+            if (m === 'fusion') return fusionModels.length > 1;
+            if (m === 'coco') return !isTfBad();
+            return !isBadModel(m);
+          });
+          if (next) {
+            console.warn(`[MODEL] Current mode ${engineMode} failed validation, falling back to ${next}`);
+            engineMode = next;
+          }
+        }
+      } catch (e) {
+        console.error('Model loading error:', e);
+        status = 'Some models failed to load';
+      } finally {
+        modelLoadPromise = null;
+      }
+    })();
+    
+    return modelLoadPromise;
   }
   let showObjPalette = $state(false);
   let objPalette = $state([]);
@@ -279,6 +303,15 @@
     detecting = false;
     if (detectTimeoutId) { clearTimeout(detectTimeoutId); detectTimeoutId = null; }
     allFusionResults = [];
+  }
+
+  function startLoop() {
+    if (!useCamera || !video || !video.srcObject) return;
+    const detInterval = $perfMode === 'performance' ? 1200 : $perfMode === 'quality' ? 400 : 800;
+    if (detectTimer) clearInterval(detectTimer);
+    detectTimer = setInterval(() => runDetectionFrame(true), detInterval);
+    if (animId) cancelAnimationFrame(animId);
+    animId = requestAnimationFrame(drawLoop);
   }
 
   function toast(msg, type = 'success') {
@@ -381,75 +414,64 @@
         currentStream.getTracks().forEach(t => t.stop());
         currentStream = null;
       }
-      const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: 'environment' } },
-            audio: false
-          }).catch(() =>
-            navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-          );
+      
+      // Check if mediaDevices is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Camera API not supported in this browser');
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: cameraFacing }, audio: false });
       currentStream = stream;
       if (!video) { status = ''; return; }
-      video.srcObject = stream; await video.play();
-      await new Promise(r => { if (video.videoWidth > 0) r(); else video.addEventListener('loadeddata', () => r(), { once: true }); });
+      video.srcObject = stream;
+      await video.play();
+      
+      // Wait for video to have dimensions
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Video timeout')), 5000);
+        const checkVideo = () => {
+          if (video.videoWidth > 0 && video.videoHeight > 0) {
+            clearTimeout(timeout);
+            resolve();
+          } else {
+            video.addEventListener('loadeddata', () => {
+              clearTimeout(timeout);
+              resolve();
+            }, { once: true });
+          }
+        };
+        checkVideo();
+      });
+      
       await tick();
       if (overlay && video) {
         overlay.width = video.videoWidth;
         overlay.height = video.videoHeight;
         requestAnimationFrame(() => positionOverlay());
       }
-      status = 'Load';
-      modelLoadErrors = [];
-      const modelsToLoad = [];
-      const modelNames = [];
-      const mk = getMobileNetModelKey(engineMode);
-      if (engineMode === 'fusion') {
-        modelsToLoad.push(loadTFModel().catch(e => {
-          console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-          return null;
-        }));
-        modelNames.push('COCO-SSD');
-       modelsToLoad.push(loadAllMobileNetModels().catch(e => {
-        console.warn('[INIT] MobileNet models failed:', e?.message);
-        return null;
-      }));
-        modelNames.push('MobileNetV2 All');
-      } else if (tfModels.includes(engineMode)) {
-        modelsToLoad.push(loadTFModel().catch(e => {
-          console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-          return null;
-        }));
-        modelNames.push('COCO-SSD');
-      } else if (mk) {
-        modelsToLoad.push(loadMobileNetModel(mk));
-        modelNames.push(`MobileNetV2 ${getEngineLabel(engineMode)}`);
-      } else {
-        modelsToLoad.push(loadTFModel().catch(e => {
-        console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-        return null;
-      }));
-        modelNames.push('COCO-SSD');
-      }
-      const loadResults = await Promise.allSettled(modelsToLoad);
-      for (let i = 0; i < loadResults.length; i++) {
-        if (loadResults[i].status === 'rejected') {
-          const err = `⚠ ${modelNames[i]} failed to load`;
-          modelLoadErrors.push(err);
-          toast(err, 'error');
-        } else {
-          console.log('✓ ' + modelNames[i] + ' loaded successfully');
-        }
-      }
+      
+      await ensureModelsLoaded();
+      
       classifyScene(video).then(s => { sceneInfo = s; }).catch(() => {});
       status = '';
-      const detInterval = $perfMode === 'performance' ? 1200 : $perfMode === 'quality' ? 400 : 800;
-      detectTimer = setInterval(() => runDetectionFrame(true), detInterval);
-      animId = requestAnimationFrame(drawLoop);
+      startLoop();
     } catch (e) {
-      status = e?.message || (e.name === 'NotAllowedError' ? 'Camera permission denied — enable in browser settings' : 'Error');
-      if (e.name === 'NotAllowedError') {
-        setTimeout(() => { if (status === 'Camera permission denied — enable in browser settings') status = ''; }, 4000);
+      console.error('Camera init error:', e);
+      if (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError') {
+        status = 'Camera permission denied — enable in browser settings';
+      } else if (e.name === 'NotFoundError' || e.message === 'Requested device not found') {
+        status = 'No camera found — check your device';
+      } else {
+        status = e?.message || 'Camera error';
       }
-      console.error(e);
+      setTimeout(() => { 
+        if (status === 'Camera permission denied — enable in browser settings' || 
+            status === 'No camera found — check your device') {
+          // Keep error visible
+        } else {
+          status = '';
+        }
+      }, 4000);
     }
   }
 
@@ -571,21 +593,23 @@
     finally { analyzingObj = false; }
   }
 
+  let captureCtx = null;
   function captureFrame(source) {
     if (!cachedFrameCanvas) cachedFrameCanvas = document.createElement('canvas');
     const cvs = cachedFrameCanvas;
+    if (!captureCtx) captureCtx = cvs.getContext('2d');
     if (source instanceof HTMLVideoElement) {
       cvs.width = source.videoWidth;
       cvs.height = source.videoHeight;
-      cvs.getContext('2d').drawImage(source, 0, 0);
+      captureCtx.drawImage(source, 0, 0);
     } else if (source instanceof HTMLCanvasElement) {
       cvs.width = source.width;
       cvs.height = source.height;
-      cvs.getContext('2d').drawImage(source, 0, 0);
+      captureCtx.drawImage(source, 0, 0);
     } else if (source instanceof HTMLImageElement) {
       cvs.width = source.naturalWidth;
       cvs.height = source.naturalHeight;
-      cvs.getContext('2d').drawImage(source, 0, 0);
+      captureCtx.drawImage(source, 0, 0);
     } else { return source; }
     return cvs;
   }
@@ -608,6 +632,16 @@
     if (!video || !useCamera || !overlay || tabHidden) { return; }
     if (detecting) return;
     if (!$objectDetectionEnabled) { detectFrameOnly(skipCheck); return; }
+    if ((engineMode !== 'fusion' && isBadModel(engineMode)) || (engineMode === 'coco' && isTfBad())) {
+      const fallbacks = ['coco', 'fusion', ...mobilenetModels];
+      const next = fallbacks.find(m => {
+        if (m === 'fusion') return fusionModels.length > 1;
+        if (m === 'coco') return !isTfBad();
+        return !isBadModel(m);
+      });
+      if (next) { engineMode = next; }
+      else { detecting = false; return; }
+    }
     if (!skipCheck) {
       skipFrameCounter++;
       if (skipFrameCounter % 3 !== 0) return;
@@ -622,9 +656,11 @@
 
       if (engineMode === 'fusion') {
         allFusionResults = [];
+        const activeFusion = fusionModels;
+        if (activeFusion.length === 0) { results = []; detecting = false; return; }
         const batchSize = $perfMode === 'performance' ? 2 : $perfMode === 'quality' ? 5 : 3;
         for (let b = 0; b < batchSize; b++) {
-          const modelId = fusionModels[fusionRotationIndex % fusionModels.length];
+          const modelId = activeFusion[fusionRotationIndex % activeFusion.length];
           fusionRotationIndex++;
           let batchResults;
           if (modelId === 'coco') batchResults = await detectTF(frame).catch(() => []);
@@ -1124,30 +1160,7 @@
       if (myId !== undefined && myId !== detectId) return;
       try {
         status = 'Detect';
-        const modelsToLoad = [];
-        if (engineMode === 'fusion') {
-          modelsToLoad.push(loadTFModel().catch(e => {
-  console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-  return null;
-}));
-         modelsToLoad.push(loadAllMobileNetModels().catch(e => {
-  console.warn('[INIT] MobileNet models failed:', e?.message);
-  return null;
-}));
-        } else if (tfModels.includes(engineMode)) {
-          modelsToLoad.push(loadTFModel().catch(e => {
-  console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-  return null;
-}));
-        } else if (mobilenetModels.includes(engineMode)) {
-          modelsToLoad.push(loadMobileNetModel(engineMode));
-        } else {
-          modelsToLoad.push(loadTFModel().catch(e => {
-  console.warn('[INIT] TF model failed, continuing without it:', e?.message);
-  return null;
-}));
-        }
-        await Promise.allSettled(modelsToLoad);
+        await ensureModelsLoaded();
         if (myId !== undefined && myId !== detectId) return;
         if (srcCanvas) { srcCanvas.width = img.naturalWidth; srcCanvas.height = img.naturalHeight; srcCanvas.getContext('2d').drawImage(img, 0, 0); }
         if (overlay) { overlay.width = img.naturalWidth; overlay.height = img.naturalHeight; }
@@ -1155,15 +1168,17 @@
         const mk = getMobileNetModelKey(engineMode);
         let allResults = [];
         if (engineMode === 'fusion') {
+          const activeMobile = mobilenetModels.filter(mk2 => !isBadModel(mk2));
           const [tfR, ...mobileR] = await Promise.all([
             detectTF(frame).catch(() => []),
-            ...mobilenetModels.map(mk2 => detectMobileNet(frame, mk2).catch(() => []))
+            ...activeMobile.map(mk2 => detectMobileNet(frame, mk2).catch(() => []))
           ]);
           allResults = [].concat(tfR, ...mobileR);
         } else if (tfModels.includes(engineMode)) {
           allResults = await detectTF(frame).catch(() => []);
         } else if (mk) {
-          allResults = await detectMobileNet(frame, mk).catch(() => []);
+          if (isBadModel(mk)) { allResults = []; }
+          else { allResults = await detectMobileNet(frame, mk).catch(() => []); }
         }
         if (myId !== undefined && myId !== detectId) return;
         let results;
@@ -1504,6 +1519,51 @@
     }
   }
 
+  async function flipCamera() {
+    if (cameraFlipping) return;
+    if (!useCamera || !currentStream) { toast('Camera not active', 'error'); return; }
+    cameraFlipping = true;
+    cameraFacing = cameraFacing === 'environment' ? 'user' : 'environment';
+    const wasRunning = detecting;
+    stopLoop();
+    if (currentStream) {
+      currentStream.getTracks().forEach(t => t.stop());
+      currentStream = null;
+    }
+    if (video) video.srcObject = null;
+    await tick();
+    try {
+      status = 'Start';
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: cameraFacing }, audio: false });
+      currentStream = stream;
+      if (!video) { cameraFlipping = false; return; }
+      video.srcObject = stream;
+      await video.play();
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Video timeout')), 5000);
+        const checkVideo = () => {
+          if (video.videoWidth > 0 && video.videoHeight > 0) { clearTimeout(timeout); resolve(); }
+          else { video.addEventListener('loadeddata', () => { clearTimeout(timeout); resolve(); }, { once: true }); }
+        };
+        checkVideo();
+      });
+      await tick();
+      if (overlay && video) {
+        overlay.width = video.videoWidth;
+        overlay.height = video.videoHeight;
+        requestAnimationFrame(() => positionOverlay());
+      }
+      status = '';
+      if (wasRunning) startLoop();
+    } catch (e) {
+      cameraFacing = cameraFacing === 'environment' ? 'user' : 'environment';
+      console.error('Flip camera error:', e);
+      toast('Failed to flip camera', 'error');
+      status = '';
+    }
+    cameraFlipping = false;
+  }
+
   async function toggleCam() {
     if (batchProcessing) { toast('Wait for current batch to finish', 'error'); return; }
     const swId = ++modeSwitchId;
@@ -1527,18 +1587,7 @@
       if (uploadedImages.length > 0) {
         switchToImage(uploadedImages.length - 1);
       }
-      const toLoad = [];
-      if (engineMode === 'fusion') {
-        toLoad.push(loadTFModel());
-        toLoad.push(loadAllMobileNetModels());
-      } else if (tfModels.includes(engineMode)) {
-        toLoad.push(loadTFModel());
-      } else if (mobilenetModels.includes(engineMode)) {
-        toLoad.push(loadMobileNetModel(engineMode));
-      } else {
-        toLoad.push(loadTFModel());
-      }
-      await Promise.allSettled(toLoad);
+      await ensureModelsLoaded();
     }
   }
 
@@ -1550,7 +1599,7 @@
 </script>
 
 <div class="detect-page" class:camera-mode={useCamera} role="region" aria-label="Detection view" ondragover={(e) => e.preventDefault()} ondrop={handleDrop}>
-  {#if status && (status.includes('Error') || status.includes('denied') || status.includes('permission'))}
+  {#if status && (status.includes('Error') || status.includes('denied') || status.includes('permission') || status.includes('camera'))}
     <div class="loading-overlay">
       <div class="loading-card">
         <div class="text-3xl mb-3 opacity-50"><i class="fas fa-exclamation-triangle"></i></div>
@@ -1606,6 +1655,9 @@
           <button class="tool-btn" class:active={useCamera} onclick={toggleCam} aria-label="Use camera">
             <i class="fas fa-camera"></i>
           </button>
+          <button class="tool-btn" onclick={flipCamera} aria-label="Flip camera" title="Flip camera (front/back)">
+            <i class="fas fa-camera-rotate"></i>
+          </button>
           <button class="tool-btn" onclick={toggleCam} aria-label="Upload image">
             <i class="fas fa-upload"></i>
           </button>
@@ -1629,7 +1681,7 @@
         </div>
       </div>
 
-      <ModeSheet show={showModeSheet} current={engineMode} onSelect={(m) => { switchMode(m); }} onClose={() => showModeSheet = false} />
+      <ModeSheet show={showModeSheet} current={engineMode} onSelect={(m) => { switchMode(m); }} onClose={() => showModeSheet = false} available={availableModels} />
 
       <div class="cam-main">
         
@@ -1639,6 +1691,9 @@
           </a>
           <button class="cam-btn" class:active={useCamera} onclick={toggleCam} aria-label="Use camera">
             <i class="fas fa-camera"></i>
+          </button>
+          <button class="cam-btn" onclick={flipCamera} aria-label="Flip camera" title="Flip camera">
+            <i class="fas fa-camera-rotate"></i>
           </button>
           <button class="cam-btn" onclick={toggleCam} aria-label="Upload image">
             <i class="fas fa-upload"></i>
@@ -1842,7 +1897,7 @@
         </div>
       </div>
 
-      <ModeSheet show={showModeSheet} current={engineMode} onSelect={(m) => { switchMode(m); }} onClose={() => showModeSheet = false} />
+      <ModeSheet show={showModeSheet} current={engineMode} onSelect={(m) => { switchMode(m); }} onClose={() => showModeSheet = false} available={availableModels} />
 
       <div class="view" class:show={!status}>
         {#if imageSrc}

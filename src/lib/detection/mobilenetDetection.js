@@ -1,4 +1,5 @@
-import { loadYoloModel, detectYolo, getYoloColor } from './yoloDetection';
+import { loadYoloModel, detectYolo, getYoloColor, isBadModel } from './yoloDetection';
+export { isBadModel };
 
 const MODELS = {
   accessibility: {
@@ -69,6 +70,7 @@ export async function loadAllMobileNetModels(onProgress) {
 }
 
 export async function detectMobileNet(source, modelKey = 'currency') {
+  if (isBadModel(modelKey)) return [];
   const sess = sessions[modelKey];
   if (!sess) {
     console.warn(`Model[${modelKey}]: not loaded`);

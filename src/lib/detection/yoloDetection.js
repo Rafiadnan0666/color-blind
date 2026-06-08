@@ -1,15 +1,11 @@
 import * as ort from 'onnxruntime-web';
-
-// Force single-threaded WASM — safer cross-browser, avoids SharedArrayBuffer requirement
-ort.env.wasm.numThreads = 1;
-ort.env.wasm.wasmPaths = '/wasm/';
-
-// Disable threading if SharedArrayBuffer is not available
-if (typeof SharedArrayBuffer === 'undefined') {
-  ort.env.wasm.numThreads = 1;
+try {
+  if (typeof window !== 'undefined' && ort?.env?.wasm) {
+    ort.env.wasm.wasmPaths = `${window.location.origin}/wasm/`;
+  }
+} catch (e) {
+  try { ort.env.wasm.wasmPaths = '/wasm/'; } catch (_) {}
 }
-
-ort.env.wasm.wasmPaths = '/wasm/';
 function hashColor(str) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -66,10 +62,12 @@ const MODELS = {
     colors: { 'Autumn Skullcap': '#8B4513', 'Death Cap': '#ff0033', 'Destroying Angels': '#ffd700', 'False Morel': '#ff6b35', 'Poison Fire Coral': '#ff3366' },
   },
 };
-const CONF_THRESHOLD = 0.35;
+const CONF_THRESHOLD = 0.25;
 const IOU_THRESHOLD = 0.45;
 let sessions = {};
 let loadAttempted = {};
+let validatedModels = {};
+let badModels = new Set();
 let _origW = 0, _origH = 0;
 let _scaleX = 1, _scaleY = 1;
 let _padX = 0, _padY = 0;
@@ -83,21 +81,109 @@ export async function loadYoloModel(modelKey = 'accessibility', onProgress) {
   const cfg = getModelCfg(modelKey);
   if (!cfg) { console.warn(`YOLO[${modelKey}]: unknown model`); return; }
   try {
-    let ep = ['wasm'];
-    try {
-      if (typeof ort.env !== 'undefined' && ort.env.wasm) {
-        ort.env.wasm.wasmPaths = '/wasm/';
-      }
-    } catch (_) {}
     if (onProgress) onProgress(modelKey, 'loading');
-    sessions[modelKey] = await ort.InferenceSession.create(cfg.path, {
-      executionProviders: ep,
-      graphOptimizationLevel: 'all',
-    });
+    // Try fetching model from multiple possible static locations and load from ArrayBuffer
+    const tryProviders = [['wasm'], ['webgl'], undefined];
+    let lastErr = null;
+    const candidates = [];
+    const rel = cfg.path.startsWith('/') ? cfg.path : `/${cfg.path}`;
+    if (typeof window !== 'undefined') {
+      const origin = window.location.origin;
+      candidates.push(`${origin}${rel}`);
+      candidates.push(`${origin}/static${rel}`);
+      candidates.push(rel);
+      candidates.push(`/static${rel}`);
+    } else {
+      candidates.push(rel, `/static${rel}`);
+    }
+    let modelBuffer = null;
+    let usedUrl = null;
+    for (const url of candidates) {
+      try {
+        const resp = await fetch(url, { method: 'GET' });
+        if (resp && resp.ok) {
+          modelBuffer = await resp.arrayBuffer();
+          usedUrl = url;
+          break;
+        }
+      } catch (err) {
+        // ignore and try next
+      }
+    }
+    if (modelBuffer) {
+      for (const providers of tryProviders) {
+        try {
+          sessions[modelKey] = await ort.InferenceSession.create(modelBuffer, {
+            executionProviders: providers,
+            graphOptimizationLevel: 'all',
+          });
+          try { console.debug(`YOLO[${modelKey}] loaded from ${usedUrl} with providers=${providers}`, { inputs: sessions[modelKey].inputNames, outputs: sessions[modelKey].outputNames }); } catch (_) {}
+          break;
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+    } else {
+      // fallback: try creating directly from the configured path string
+      for (const providers of tryProviders) {
+        try {
+          sessions[modelKey] = await ort.InferenceSession.create(cfg.path, {
+            executionProviders: providers,
+            graphOptimizationLevel: 'all',
+          });
+          try { console.debug(`YOLO[${modelKey}] loaded via fallback path=${cfg.path} with providers=${providers}`, { inputs: sessions[modelKey].inputNames, outputs: sessions[modelKey].outputNames }); } catch (_) {}
+          break;
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+    }
+    if (!sessions[modelKey]) throw lastErr || new Error('Failed to create session');
+    const valid = await validateModel(modelKey);
+    if (!valid) {
+      console.warn(`[MODEL_VALIDATION] ${modelKey} failed validation — marking as bad`);
+      badModels.add(modelKey);
+      delete sessions[modelKey];
+      if (onProgress) onProgress(modelKey, 'error');
+      return;
+    }
+    validatedModels[modelKey] = true;
     if (onProgress) onProgress(modelKey, 'ready');
   } catch (e) {
     console.error(`[MODEL_LOAD_ERROR] YOLO[${modelKey}]:`, e?.message || e);
     if (onProgress) onProgress(modelKey, 'error');
+  }
+}
+
+async function validateModel(modelKey) {
+  const cfg = getModelCfg(modelKey);
+  if (!cfg) return false;
+  const session = sessions[modelKey];
+  if (!session) return false;
+  try {
+    const inputSize = cfg.inputSize;
+    const dummyData = new Float32Array(3 * inputSize * inputSize).fill(0.5);
+    const t = new ort.Tensor('float32', dummyData, [1, 3, inputSize, inputSize]);
+    const feeds = { [session.inputNames[0]]: t };
+    const results = await session.run(feeds);
+    if (!results || !session.outputNames?.[0]) return false;
+    const output = results[session.outputNames[0]];
+    if (!output || !output.data || output.data.length === 0) return false;
+    if (cfg.isClassifier) {
+      const probs = Array.from(output.data);
+      const maxVal = Math.max(...probs);
+      if (maxVal < 0.001 || isNaN(maxVal)) return false;
+    } else {
+      const data = output.data;
+      const dataArr = Array.from(data);
+      const maxVal = Math.max(...dataArr);
+      const minVal = Math.min(...dataArr);
+      if (Math.abs(maxVal - minVal) < 0.0001 || dataArr.some(v => isNaN(v))) return false;
+    }
+    return true;
+  } catch (e) {
+    console.warn(`[MODEL_VALIDATION] ${modelKey} error:`, e?.message);
+    return false;
   }
 }
 export async function loadAllYoloModels(onProgress) {
@@ -110,21 +196,23 @@ function softmax(arr) {
   const sum = exps.reduce((a, b) => a + b, 0);
   return exps.map(v => v / sum);
 }
+let ppCtx = null;
 function captureSource(source) {
   if (!preprocessCanvas) preprocessCanvas = document.createElement('canvas');
+  if (!ppCtx) ppCtx = preprocessCanvas.getContext('2d');
   const cvs = preprocessCanvas;
   let srcW, srcH;
   if (source instanceof HTMLVideoElement) {
     cvs.width = source.videoWidth; cvs.height = source.videoHeight;
-    cvs.getContext('2d').drawImage(source, 0, 0);
+    ppCtx.drawImage(source, 0, 0);
     srcW = cvs.width; srcH = cvs.height;
   } else if (source instanceof HTMLCanvasElement) {
     cvs.width = source.width; cvs.height = source.height;
-    cvs.getContext('2d').drawImage(source, 0, 0);
+    ppCtx.drawImage(source, 0, 0);
     srcW = cvs.width; srcH = cvs.height;
   } else if (source instanceof HTMLImageElement) {
     cvs.width = source.naturalWidth; cvs.height = source.naturalHeight;
-    cvs.getContext('2d').drawImage(source, 0, 0);
+    ppCtx.drawImage(source, 0, 0);
     srcW = cvs.width; srcH = cvs.height;
   } else {
     throw new Error('Unsupported source');
@@ -182,56 +270,25 @@ function preprocessClassify(source, inputSize) {
 }
 function decodeDetections(output, classNames, inputSize) {
   const numClasses = classNames.length;
-  const data = output.data;
-  const dims = output.dims;
-  if (!data || !dims || dims.length < 2) return [];
+  const data = output?.data;
+  const dims = output?.dims || [];
+  if (!data || !dims || data.length === 0) return [];
   const dets = [];
-  let numDetections, stride, bboxOffset;
-  if (dims.length === 3 && dims[0] === 1) {
-    if (dims[1] === numClasses + 4) {
-      numDetections = dims[2];
-      stride = numDetections;
-      bboxOffset = 0;
-    } else if (dims[2] === numClasses + 4) {
-      numDetections = dims[1];
-      stride = dims[2];
-      bboxOffset = 0;
-    } else if (dims[1] === 4 + numClasses) {
-      numDetections = dims[2];
-      stride = numDetections;
-      bboxOffset = 0;
-    } else if (dims[2] === 4 + numClasses) {
-      numDetections = dims[1];
-      stride = dims[2];
-      bboxOffset = 0;
-    } else {
-      return [];
-    }
-  } else if (dims.length === 2 && dims[0] === 1) {
-    const totalCols = dims[1];
-    const expectedCols = numClasses + 4;
-    if (totalCols % expectedCols === 0) {
-      numDetections = totalCols / expectedCols;
-      stride = expectedCols;
-    } else {
-      return [];
-    }
-  } else {
-    return [];
-  }
+  const expectedCols = 4 + numClasses;
   const totalVals = data.length;
+  if (totalVals % expectedCols !== 0) return [];
+  const numDetections = totalVals / expectedCols;
   for (let i = 0; i < numDetections; i++) {
-    const idx = bboxOffset + i;
-    if (idx + 3 * stride + i >= totalVals) break;
-    const cx = data[idx] || 0;
-    const cy = data[bboxOffset + 1 * stride + i] || 0;
-    const w = data[bboxOffset + 2 * stride + i] || 0;
-    const h = data[bboxOffset + 3 * stride + i] || 0;
+    const base = i * expectedCols;
+    const cx = data[base] ?? 0;
+    const cy = data[base + 1] ?? 0;
+    const w = data[base + 2] ?? 0;
+    const h = data[base + 3] ?? 0;
     if (w <= 0 || h <= 0) continue;
     let maxScore = 0, bestClass = -1;
     for (let c = 0; c < numClasses; c++) {
-      const ci = bboxOffset + (4 + c) * stride + i;
-      const score = ci < totalVals ? sigmoid(data[ci]) : 0;
+      const v = data[base + 4 + c] ?? -Infinity;
+      const score = sigmoid(v);
       if (score > maxScore) { maxScore = score; bestClass = c; }
     }
     if (maxScore < CONF_THRESHOLD || bestClass < 0) continue;
@@ -259,7 +316,16 @@ function iou(a, b) {
   const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
   return inter / ((a.x2 - a.x1) * (a.y2 - a.y1) + (b.x2 - b.x1) * (b.y2 - b.y1) - inter + 1e-6);
 }
+export function isBadModel(modelKey) {
+  return badModels.has(modelKey);
+}
+
+export function getBadModels() {
+  return new Set(badModels);
+}
+
 export async function detectYolo(source, modelKey = 'accessibility') {
+  if (badModels.has(modelKey)) return [];
   if (!sessions[modelKey]) { console.warn(`YOLO[${modelKey}]: session not loaded`); return []; }
   const cfg = getModelCfg(modelKey);
   if (!cfg) { console.warn(`YOLO[${modelKey}]: unknown model config`); return []; }
@@ -269,10 +335,14 @@ export async function detectYolo(source, modelKey = 'accessibility') {
     if (cfg.isClassifier) {
       return classifyImage(source, modelKey, cfg, session);
     }
+    if (!session.inputNames || !session.inputNames[0]) {
+      console.warn(`YOLO[${modelKey}]: session has no inputNames`);
+      return [];
+    }
     const t = preprocessDetect(source, cfg.inputSize);
     const feeds = { [session.inputNames[0]]: t };
     const results = await session.run(feeds);
-    if (!results || !session.outputNames || !session.outputNames[0]) return [];
+    if (!results || !session.outputNames || !session.outputNames[0]) { console.warn(`YOLO[${modelKey}]: session has no outputNames`); return []; }
     const output = results[session.outputNames[0]];
     if (!output) return [];
     const dets = decodeDetections(output, cfg.classes, cfg.inputSize);
@@ -287,6 +357,10 @@ export async function detectYolo(source, modelKey = 'accessibility') {
 }
 async function classifyImage(source, modelKey, cfg, session) {
   try {
+    if (!session.inputNames || !session.inputNames[0]) {
+      console.warn(`Classify[${modelKey}]: session has no inputNames`);
+      return [];
+    }
     const t = preprocessClassify(source, cfg.inputSize);
     const feeds = { [session.inputNames[0]]: t };
     const results = await session.run(feeds);

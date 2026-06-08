@@ -1,18 +1,19 @@
 <script>
   import { fly, scale } from 'svelte/transition';
 
-  let { show = false, current = 'fusion', onSelect, onClose } = $props();
+  let { show = false, current = 'fusion', onSelect, onClose, available = [] } = $props();
 
-  const modes = [
+  const allModes = [
     { id: 'fusion', icon: 'fa-compress-alt', label: 'Fusion', desc: 'All engines combined' },
     { id: 'coco', icon: 'fa-globe', label: 'COCO', desc: '90-class general objects' },
     { id: 'currency', icon: 'fa-money-bill-wave', label: 'Currency', desc: '7 rupiah notes' },
-    { id: 'drug', icon: 'fa-pills', label: 'Medicine', desc: 'Medicine detection (paracetamol, panadol, amoxicillin, vitamin C)' },
+    { id: 'drug', icon: 'fa-pills', label: 'Medicine', desc: 'Medicine detection' },
     { id: 'traffic_light', icon: 'fa-traffic-light', label: 'Traffic', desc: 'Red, green, yellow' },
     { id: 'accessibility', icon: 'fa-universal-access', label: 'Access', desc: 'Road signs' },
     { id: 'meat', icon: 'fa-drumstick-bite', label: 'Meat', desc: 'Meat freshness' },
     { id: 'mushroom', icon: 'fa-seedling', label: 'Mushroom', desc: 'Mushroom toxicity' },
   ];
+  let modes = $derived(available.length > 0 ? allModes.filter(m => available.includes(m.id)) : allModes);
 
   function getEngineColor(modeId) {
     const colors = {

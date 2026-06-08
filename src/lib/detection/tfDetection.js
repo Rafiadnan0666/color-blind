@@ -16,6 +16,7 @@ const COCO_CLASSES = [
 
 let model = null;
 let loadAttempted = false;
+let tfBadModel = false;
 
 export async function loadTFModel() {
   if (model) return model;
@@ -46,6 +47,7 @@ export async function loadTFModel() {
 }
 
 export async function detectTF(source) {
+  if (tfBadModel) return [];
   if (!model) {
     await loadTFModel();
     if (!model) return [];
@@ -53,7 +55,10 @@ export async function detectTF(source) {
   if (!model) return [];
   try {
     const predictions = await model.detect(source, 40);
-    if (!predictions || !Array.isArray(predictions)) return [];
+    if (!predictions || !Array.isArray(predictions)) {
+      if (!tfBadModel) { tfBadModel = true; console.warn('[TF_MODEL] COCO-SSD returned invalid predictions, marking as bad'); }
+      return [];
+    }
     return predictions.map((p) => ({
       x1: p.bbox[0], y1: p.bbox[1], x2: p.bbox[0] + p.bbox[2], y2: p.bbox[1] + p.bbox[3],
       width: p.bbox[2], height: p.bbox[3], score: p.score, classId: COCO_CLASSES.indexOf(p.class),
@@ -76,4 +81,5 @@ export function getTFColor(label) {
   return NEO_COLORS[Math.abs(hash) % NEO_COLORS.length];
 }
 
+export function isTfBad() { return tfBadModel; }
 export { COCO_CLASSES };
