@@ -1,3 +1,5 @@
+import { analyzeMeat as analyzeMeatAdvanced, analyzeMushroom as analyzeMushroomAdvanced } from './analysis';
+
 const MEAT_CLASSES = ['Fresh', 'Half-Fresh', 'Spoiled'];
 
 const MEAT_INFO = {
@@ -85,6 +87,7 @@ export function analyzeMeat(label, score) {
       color: '#888',
       severity: 'unknown',
       icon: 'fa-question-circle',
+      confidence: score,
     };
   }
   return {
@@ -111,6 +114,14 @@ export function analyzeMushroom(label, score) {
     confidence: score,
     confidenceLabel: `${(score * 100).toFixed(0)}%`,
   };
+}
+
+export function analyzeMeatWithSource(det, source) {
+  return analyzeMeatAdvanced(det, source);
+}
+
+export function analyzeMushroomWithSource(det, source) {
+  return analyzeMushroomAdvanced(det, source);
 }
 
 export function getMeatSafetyColor(label) {

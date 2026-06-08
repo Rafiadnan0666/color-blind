@@ -12,7 +12,7 @@
   import { session, user } from '$lib/stores/auth';
   import { notifyScanComplete, notifyColorSaved, notifyFavoriteSaved } from '$lib/supabase/notifications';
   import { speakColor, speakObject, speakMeatResult, speakMushroomResult } from '$lib/utils/voice';
-  import { analyzeMeat, analyzeMushroom } from '$lib/detection/foodSafety';
+  import { analyzeDetection } from '$lib/detection/analysis';
   import { perfMode, objectDetectionEnabled, colorDetectionEnabled, realtimeDetection } from '$lib/stores/settings';
 
   let video = $state(null);
@@ -641,10 +641,16 @@
 
       if (engineMode === 'meat' || engineMode === 'mushroom') {
         results = results.filter(d => d.score >= 0.2);
-        if (engineMode === 'meat') results = results.map(d => ({ ...d, analysis: analyzeMeat(d.label, d.score) }));
-        else if (engineMode === 'mushroom') results = results.map(d => ({ ...d, analysis: analyzeMushroom(d.label, d.score) }));
+        results = results.map(d => ({
+          ...d,
+          analysis: analyzeDetection(d, frame, engineMode, overlay.width, overlay.height),
+        }));
       } else {
         results = filterDetections(results);
+        results = results.map(d => ({
+          ...d,
+          analysis: analyzeDetection(d, frame, engineMode, overlay.width, overlay.height),
+        }));
       }
       const cw = overlay.width, ch = overlay.height;
       if (!prevDets.length) prevDets = results;
@@ -1169,10 +1175,16 @@
         let results;
         if (engineMode === 'meat' || engineMode === 'mushroom') {
           results = allResults.filter(d => d.score >= 0.2);
-          if (engineMode === 'meat') results = results.map(d => ({ ...d, analysis: analyzeMeat(d.label, d.score) }));
-          else if (engineMode === 'mushroom') results = results.map(d => ({ ...d, analysis: analyzeMushroom(d.label, d.score) }));
+          results = results.map(d => ({
+            ...d,
+            analysis: analyzeDetection(d, frame, engineMode, overlay?.width, overlay?.height),
+          }));
         } else {
           results = filterDetections(allResults);
+          results = results.map(d => ({
+            ...d,
+            analysis: analyzeDetection(d, frame, engineMode, overlay?.width, overlay?.height),
+          }));
         }
         detections = results;
 
