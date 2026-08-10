@@ -92,6 +92,15 @@
   }
 </script>
 
+<svelte:head>
+  <title>ClrBlind — AI Color Vision Accessibility App</title>
+  <meta name="description" content="ClrBlind is a free, privacy-first AI app that detects objects, colors, text, and scenes for color blind users — 100% on-device, no image uploads." />
+  <meta name="theme-color" content="#0a0a0a" />
+  <meta property="og:title" content="ClrBlind — AI Color Vision Accessibility App" />
+  <meta property="og:description" content="See the world described aloud. Free, privacy-first, 100% on-device AI for color blind users." />
+  <meta property="og:type" content="website" />
+</svelte:head>
+
 <div class="min-h-screen flex flex-col">
   <header class="border-b-brut border-neo-black bg-neo-white">
     <div class="max-w-7xl mx-auto px-4 flex items-center justify-between h-16">
@@ -211,7 +220,12 @@
   {#if $page.url.pathname.startsWith('/auth') || $page.url.pathname === '/'}
     <footer class="border-t-brut border-neo-black bg-neo-black text-neo-white py-4">
       <div class="max-w-7xl mx-auto px-4 text-center font-brut text-brut-xs uppercase tracking-wider">
-        ClrBlind &copy; {new Date().getFullYear()}
+        <div class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mb-2">
+          <a href="/privacy" class="hover:opacity-70 transition-opacity">Privacy</a>
+          <a href="/terms" class="hover:opacity-70 transition-opacity">Terms</a>
+          <a href="/about" class="hover:opacity-70 transition-opacity">About</a>
+        </div>
+        ClrBlind &copy; {new Date().getFullYear()} — AI accessibility for color blind users
       </div>
     </footer>
   {/if}

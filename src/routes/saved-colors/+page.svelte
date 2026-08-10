@@ -108,6 +108,7 @@
       </div>
     {/if}
   </div>
+  <AdSlot unit="leaderboard" />
 </div>
 
 {#if detailItem}

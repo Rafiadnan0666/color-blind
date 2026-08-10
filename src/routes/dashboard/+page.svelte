@@ -2,6 +2,7 @@
   import { user } from '$lib/stores/auth';
   import { goto } from '$app/navigation';
   import { userSettings, userProfile, feedback, objectAnalytics } from '$lib/supabase/db';
+  import AdSlot from '$lib/components/AdSlot.svelte';
   import { onMount } from 'svelte';
 
   let initials = $state('');
@@ -85,7 +86,7 @@
           <div class="stat-num">{stats.length || 0}</div>
           <div class="stat-label">Detections</div>
         </div>
-        <div class="stat-card accent-green">
+<div class="stat-card accent-green">
           <div class="stat-num">{profile?.voiceenabled ? 'ON' : 'OFF'}</div>
           <div class="stat-label">Voice</div>
         </div>
@@ -94,9 +95,8 @@
           <span>Settings</span>
         </a>
       </div>
-    </div>
 
-    <div class="greeting-card" style="border-left: 6px solid #39ff14;">
+      <AdSlot unit="leaderboard" />
       <h2 class="greeting-text">
         <i class="fas fa-hand-wave greeting-wave"></i> {getGreeting()}, {profile?.name || 'User'}!
       </h2>

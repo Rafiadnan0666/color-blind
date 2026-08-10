@@ -1,11 +1,13 @@
 <script>
   import ScanHistoryList from '$lib/components/ScanHistoryList.svelte';
+  import AdSlot from '$lib/components/AdSlot.svelte';
 </script>
 
 <div class="page-wrap">
   <div class="brut-card">
     <ScanHistoryList />
   </div>
+  <AdSlot unit="rectangle" />
 </div>
 
 <style>
