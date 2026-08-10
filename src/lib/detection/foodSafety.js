@@ -1,5 +1,3 @@
-import { analyzeMeat as analyzeMeatAdvanced, analyzeMushroom as analyzeMushroomAdvanced } from './analysis';
-
 const MEAT_CLASSES = ['Fresh', 'Half-Fresh', 'Spoiled'];
 
 const MEAT_INFO = {
@@ -117,11 +115,11 @@ export function analyzeMushroom(label, score) {
 }
 
 export function analyzeMeatWithSource(det, source) {
-  return analyzeMeatAdvanced(det, source);
+  return analyzeMeat(det.label, det.score);
 }
 
 export function analyzeMushroomWithSource(det, source) {
-  return analyzeMushroomAdvanced(det, source);
+  return analyzeMushroom(det.label, det.score);
 }
 
 export function getMeatSafetyColor(label) {

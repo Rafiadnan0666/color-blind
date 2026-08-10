@@ -17,6 +17,11 @@ declare global {
     // interface PageState {}
     // interface Platform {}
   }
+
+  interface Window {
+    _clrblindAdsLoaded?: boolean;
+    adsbygoogle?: unknown[];
+  }
 }
 
 export {};

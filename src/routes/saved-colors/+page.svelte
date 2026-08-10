@@ -3,6 +3,7 @@
   import { savedColors } from '$lib/supabase/db';
   import { session, isAuthLoading } from '$lib/stores/auth';
   import { goto } from '$app/navigation';
+  import AdSlot from '$lib/components/AdSlot.svelte';
 
   let items = $state([]);
   let loading = $state(true);
