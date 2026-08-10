@@ -3,7 +3,6 @@
   import AdSlot from '$lib/components/AdSlot.svelte';
   import { onMount, onDestroy } from 'svelte';
   import gsap from 'gsap';
-  import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
   const modes = [
     { name: 'Currency (Rp)', desc: 'Detect Indonesian Rupiah notes', icon: 'fa-tag', color: '#ffd700' },
@@ -50,10 +49,13 @@
 
   let pageEl;
   let ctx;
+  let ScrollTrigger;
 
-  onMount(() => {
-    gsap.registerPlugin(ScrollTrigger);
+  onMount(async () => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    ({ ScrollTrigger } = await import('gsap/ScrollTrigger'));
+    gsap.registerPlugin(ScrollTrigger);
 
     ctx = gsap.context(() => {
       const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
@@ -90,7 +92,7 @@
 
   onDestroy(() => {
     ctx?.revert();
-    ScrollTrigger.getAll().forEach((t) => t.kill());
+    ScrollTrigger?.getAll()?.forEach((t) => t.kill());
   });
 </script>
 
