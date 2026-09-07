@@ -1,5 +1,8 @@
 node_modules
 
+# ML Training outputs
+/runs
+
 # Output
 .output
 .vercel

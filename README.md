@@ -108,17 +108,42 @@ Identifies the environment from 4 categories: garden, orchard, indoor kitchen, s
 
 ## Screenshots
 
-| Detection Modes | Currency Detection | Medicine Detection |
-|----------------|-------------------|-------------------|
-| ![Modes](public/screenshots/detection-modes.png) | ![Currency](public/screenshots/currency-detection.png) | ![Medicine](public/screenshots/medicine-detection.png) |
-
-| Meat Freshness | Mushroom Toxicity | OCR Scanner |
-|----------------|-------------------|-------------|
-| ![Meat](public/screenshots/meat-freshness.png) | ![Mushroom](public/screenshots/mushroom-toxicity.png) | ![OCR](public/screenshots/ocr-scanner.png) |
-
-| Color Analysis Dashboard |
-|-------------------------|
-| ![Dashboard](public/screenshots/color-analysis-dashboard.png) |
+<table>
+<tr>
+<td align="center" width="33%">
+<b>Detection Modes</b><br>
+<img src="public/screenshots/detection-modes.png" alt="Detection Modes" width="400">
+</td>
+<td align="center" width="33%">
+<b>Currency Detection</b><br>
+<img src="public/screenshots/currency-detection.png" alt="Currency Detection" width="400">
+</td>
+<td align="center" width="33%">
+<b>Medicine Detection</b><br>
+<img src="public/screenshots/medicine-detection.png" alt="Medicine Detection" width="400">
+</td>
+</tr>
+<tr>
+<td align="center" width="33%">
+<b>Meat Freshness</b><br>
+<img src="public/screenshots/meat-freshness.png" alt="Meat Freshness" width="400">
+</td>
+<td align="center" width="33%">
+<b>Mushroom Toxicity</b><br>
+<img src="public/screenshots/mushroom-toxicity.png" alt="Mushroom Toxicity" width="400">
+</td>
+<td align="center" width="33%">
+<b>OCR Scanner</b><br>
+<img src="public/screenshots/ocr-scanner.png" alt="OCR Scanner" width="400">
+</td>
+</tr>
+<tr>
+<td align="center" colspan="3">
+<b>Color Analysis Dashboard</b><br>
+<img src="public/screenshots/color-analysis-dashboard.png" alt="Color Analysis Dashboard" width="800">
+</td>
+</tr>
+</table>
 
 ---
 
