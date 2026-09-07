@@ -288,6 +288,39 @@ Three levels adapt the detection interval to device capability:
 
 ---
 
+## Known Limitations
+
+| Limitation | Impact | Workaround |
+|------------|--------|------------|
+| **No iOS Safari WASM threads** | ONNX Runtime Web threading fails on iOS | Fallback to single-threaded WASM |
+| **Model bundle size** | ~50MB total (6 ONNX + TFJS models) | Lazy-load models on demand |
+| **No offline model caching** | Models re-download on each visit | Service Worker caching planned |
+| **Limited to 14 OCR languages** | Tesseract.js doesn't support all scripts | Custom trained models for specific languages |
+| **WebGL required** | COCO-SSD needs WebGL 2.0 | CPU fallback degrades performance |
+| **No batch API** | Single image processing per request | Queue multiple uploads client-side |
+| **Gemini Nano limited availability** | Browser AI only in Chrome Canary/Dev | Fallback to on-device QnA model |
+| **No real-time collaboration** | Single-user detection sessions | Multi-user sessions planned |
+| **Fixed confidence thresholds** | No per-model threshold tuning | Add settings panel for advanced users |
+| **No export of annotated images** | Detection results only as JSON/CSV | Canvas-based image export planned |
+
+---
+
+## Screenshots
+
+| Detection Modes | Currency Detection | Medicine Detection |
+|----------------|-------------------|-------------------|
+| ![Modes](public/screenshots/Screenshot%202026-08-17%20233229.png) | ![Currency](public/screenshots/Screenshot%202026-08-17%20233254.png) | ![Medicine](public/screenshots/Screenshot%202026-08-17%20233408.png) |
+
+| Meat Freshness | Mushroom Toxicity | OCR Scanner |
+|----------------|-------------------|-------------|
+| ![Meat](public/screenshots/Screenshot%202026-08-17%20233417.png) | ![Mushroom](public/screenshots/Screenshot%202026-08-17%20233426.png) | ![OCR](public/screenshots/Screenshot%202026-08-17%20233440.png) |
+
+| Color Analysis Dashboard |
+|-------------------------|
+| ![Dashboard](public/screenshots/Screenshot%202026-09-07%20115844.png) |
+
+---
+
 ## License
 
 MIT
