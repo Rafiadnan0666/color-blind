@@ -6,6 +6,25 @@
 
 ---
 
+## Table of Contents
+
+- [Why ClrBlind?](#why-clrblind)
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [ML Models](#ml-models)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Database Schema (ERD)](#database-schema-erd)
+- [Quick Start](#quick-start)
+- [Build & Deploy](#build--deploy)
+- [Security & Privacy](#security--privacy)
+- [Performance Modes](#performance-modes)
+- [Auth Providers](#auth-providers)
+- [Known Limitations](#known-limitations)
+- [License](#license)
+
+---
+
 ## Why ClrBlind?
 
 Around 300 million people worldwide have some form of color blindness. Everyday tasks — reading traffic lights, identifying currency, checking meat freshness, distinguishing pills — can be challenging. ClrBlind puts a pocket AI assistant in the browser that describes the visual world aloud and on-screen, with zero server uploads.
@@ -77,13 +96,29 @@ Identifies the environment from 4 categories: garden, orchard, indoor kitchen, s
 ### User Experience
 
 - **Camera & upload** — live camera feed or image file (PNG, JPG, WebP, GIF, BMP, TIFF)
-- **Batch processing** — upload multiple images, process sequentially, swtich between results
+- **Batch processing** — upload multiple images, process sequentially, switch between results
 - **Magnifier** — live zoom with grid overlay for fine detail inspection
 - **Interactive tour** — 3-step onboarding with element highlighting for first-time users
 - **Notifications** — in-app panel with read/unread status, badge counts; transactional emails via Resend
 - **Feedback** — rate the app, submit comments
 - **Themes** — Light, Dark, Grey, and System themes via CSS custom properties
 - **Performance modes** — Quality (400ms interval), Balanced (800ms), Performance (1200ms) for battery/device tuning
+
+---
+
+## Screenshots
+
+| Detection Modes | Currency Detection | Medicine Detection |
+|----------------|-------------------|-------------------|
+| ![Modes](public/screenshots/detection-modes.png) | ![Currency](public/screenshots/currency-detection.png) | ![Medicine](public/screenshots/medicine-detection.png) |
+
+| Meat Freshness | Mushroom Toxicity | OCR Scanner |
+|----------------|-------------------|-------------|
+| ![Meat](public/screenshots/meat-freshness.png) | ![Mushroom](public/screenshots/mushroom-toxicity.png) | ![OCR](public/screenshots/ocr-scanner.png) |
+
+| Color Analysis Dashboard |
+|-------------------------|
+| ![Dashboard](public/screenshots/color-analysis-dashboard.png) |
 
 ---
 
@@ -199,6 +234,32 @@ supabase/
 
 ---
 
+## Database Schema (ERD)
+
+See [ERD.md](ERD.md) for the complete Entity Relationship Diagram with Mermaid visualization.
+
+### Tables
+
+The app uses Supabase PostgreSQL with 11 tables:
+
+| Table | Purpose |
+|-------|---------|
+| `ScanHistory` | Detection results with mode, object name, color, confidence |
+| `Favorites` | Bookmarked detections |
+| `SavedColors` | User's color collection with hex/RGB |
+| `SavedObjects` | User's object collection with notes |
+| `ObjectAnalytics` | Aggregated detection statistics (RPC-driven) |
+| `Notifications` | In-app notification feed |
+| `Feedback` | User ratings and comments |
+| `OCRHistory` | OCR extraction history |
+| `AssistantHistory` | Q&A chat history |
+| `UserSettings` | Feature toggles, theme, performance mode |
+| `UserProfile` | Name, avatar, language, CVD preferences |
+
+All tables reference `auth.users` via `userid` (UUID) with client-side rate limiting (10 ops / 2s window).
+
+---
+
 ## Quick Start
 
 ```bash
@@ -234,36 +295,14 @@ Supports **Vercel** and **Netlify** zero-config deployment. WASM MIME types and 
 
 ---
 
-## Database Schema
+## Security & Privacy
 
-The app uses Supabase PostgreSQL with 11 tables:
-
-| Table | Purpose |
-|-------|---------|
-| `ScanHistory` | Detection results with mode, object name, color, confidence |
-| `Favorites` | Bookmarked detections |
-| `SavedColors` | User's color collection with hex/RGB |
-| `SavedObjects` | User's object collection with notes |
-| `ObjectAnalytics` | Aggregated detection statistics (RPC-driven) |
-| `Notifications` | In-app notification feed |
-| `Feedback` | User ratings and comments |
-| `OCRHistory` | OCR extraction history |
-| `AssistantHistory` | Q&A chat history |
-| `UserSettings` | Feature toggles, theme, performance mode |
-| `UserProfile` | Name, avatar, language, CVD preferences |
-
-All tables reference `auth.users` via `userid` (UUID) with client-side rate limiting (10 ops / 2s window).
-
----
-
-## Auth Providers
-
-- **Email/Password** — standard registration and login
-- **Google OAuth** — one-tap sign-in
-- **Magic Link** — passwordless email login
-- **Password Reset** — forgot password flow with recovery email
-
-Session management uses `@supabase/ssr` with cookie-based sessions and real-time `onAuthStateChange` listeners.
+- **100% client-side inference** — camera frames and uploaded images are never transmitted
+- **Supabase only stores metadata** — object names, colors, confidence scores, timestamps
+- **CSP headers** configured for safe WASM execution (`wasm-unsafe-eval`, `blob:`)
+- **Cross-Origin policies** set for WASM and model file serving
+- **Input sanitization** — all user inputs are stripped of `<>` and truncated before storage
+- **Rate limiting** — client-side throttling prevents rapid-fire API calls
 
 ---
 
@@ -277,14 +316,14 @@ Three levels adapt the detection interval to device capability:
 
 ---
 
-## Security & Privacy
+## Auth Providers
 
-- **100% client-side inference** — camera frames and uploaded images are never transmitted
-- **Supabase only stores metadata** — object names, colors, confidence scores, timestamps
-- **CSP headers** configured for safe WASM execution (`wasm-unsafe-eval`, `blob:`)
-- **Cross-Origin policies** set for WASM and model file serving
-- **Input sanitization** — all user inputs are stripped of `<>` and truncated before storage
-- **Rate limiting** — client-side throttling prevents rapid-fire API calls
+- **Email/Password** — standard registration and login
+- **Google OAuth** — one-tap sign-in
+- **Magic Link** — passwordless email login
+- **Password Reset** — forgot password flow with recovery email
+
+Session management uses `@supabase/ssr` with cookie-based sessions and real-time `onAuthStateChange` listeners.
 
 ---
 
@@ -302,22 +341,6 @@ Three levels adapt the detection interval to device capability:
 | **No real-time collaboration** | Single-user detection sessions | Multi-user sessions planned |
 | **Fixed confidence thresholds** | No per-model threshold tuning | Add settings panel for advanced users |
 | **No export of annotated images** | Detection results only as JSON/CSV | Canvas-based image export planned |
-
----
-
-## Screenshots
-
-| Detection Modes | Currency Detection | Medicine Detection |
-|----------------|-------------------|-------------------|
-| ![Modes](public/screenshots/Screenshot%202026-08-17%20233229.png) | ![Currency](public/screenshots/Screenshot%202026-08-17%20233254.png) | ![Medicine](public/screenshots/Screenshot%202026-08-17%20233408.png) |
-
-| Meat Freshness | Mushroom Toxicity | OCR Scanner |
-|----------------|-------------------|-------------|
-| ![Meat](public/screenshots/Screenshot%202026-08-17%20233417.png) | ![Mushroom](public/screenshots/Screenshot%202026-08-17%20233426.png) | ![OCR](public/screenshots/Screenshot%202026-08-17%20233440.png) |
-
-| Color Analysis Dashboard |
-|-------------------------|
-| ![Dashboard](public/screenshots/Screenshot%202026-09-07%20115844.png) |
 
 ---
 
